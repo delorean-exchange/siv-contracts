@@ -6,6 +6,7 @@ import "openzeppelin/token/ERC20/IERC20.sol";
 
 import "./BaseTest.sol";
 import "../src/interfaces/gmx/IRewardTracker.sol";
+import "../src/testonly/TestYieldSource.sol";
 import "../src/vaults/SelfInsuredVault.sol";
 
 contract SelfInsuredVaultTest is BaseTest {
@@ -20,22 +21,49 @@ contract SelfInsuredVaultTest is BaseTest {
 
     address glpWallet = 0x3aaF2aCA2a0A6b6ec227Bbc2bF5cEE86c2dC599d;
 
-    SelfInsuredVault public vault;
-
     function setUp() public {
         /* arbitrumFork = vm.createFork(ARBITRUM_RPC_URL, 58729505); */
         arbitrumFork = vm.createFork(ARBITRUM_RPC_URL, 61330138);
-        vm.selectFork(arbitrumFork);
-
-        vault = new SelfInsuredVault("Self Insured GLP Vault", "siGLP", address(sGLP));
     }
 
     function testCallToY2K() public {
+        vm.selectFork(arbitrumFork);
         address token = y2kUSDTVault.tokenInsured();
         assertEq(token, address(usdt));
     }
 
+    function testWithTestYieldSource() public {
+        TestYieldSource source = new TestYieldSource(200);
+        IERC20 gt = IERC20(source.generatorToken());
+        SelfInsuredVault vault = new SelfInsuredVault("Self Insured YS:G Vault",
+                                                      "siYS:G",
+                                                      address(source));
+        address user0 = createUser(0);
+        source.mintGenerator(user0, 10e18);
+
+        vm.startPrank(user0);
+        gt.approve(address(vault), 2e18);
+        assertEq(vault.previewDeposit(2e18), 2e18);
+        vault.deposit(2e18, user0);
+        assertEq(gt.balanceOf(user0), 8e18);
+        assertEq(gt.balanceOf(address(vault)), 2e18);
+        assertEq(vault.balanceOf(user0), 2e18);
+        vm.stopPrank();
+
+        assertEq(vault.cumulativeYield(), 0);
+
+        vm.roll(block.number + 1);
+        assertEq(vault.cumulativeYield(), 400e18);
+        console.log("----");
+        assertEq(vault.calculatePendingYield(user0), 400e18);
+    }
+
     function testDepositWithdraw() public {
+        vm.selectFork(arbitrumFork);
+        SelfInsuredVault vault = new SelfInsuredVault("Self Insured GLP Vault",
+                                                      "siGLP",
+                                                      address(sGLP));
+
         console.log(sGLP.balanceOf(glpWallet));
 
         address user = createUser(0);

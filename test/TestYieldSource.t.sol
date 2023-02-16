@@ -3,6 +3,7 @@ pragma solidity ^0.8.13;
 
 import "./BaseTest.sol";
 
+import "../src/testonly/TestToken.sol";
 import "../src/testonly/TestYieldSource.sol";
 
 contract TestYieldSourceTest is BaseTest {
@@ -21,7 +22,7 @@ contract TestYieldSourceTest is BaseTest {
         vm.prank(user0);
         source.harvest();
         assertEq(source.amountPending(user0), 0);
-        assertEq(source.yieldToken().balanceOf(user0), 2000);
+        assertEq(TestToken(source.yieldToken()).balanceOf(user0), 2000);
 
         address user1 = createUser(1);
         assertEq(source.amountPending(user1), 0);
@@ -41,7 +42,7 @@ contract TestYieldSourceTest is BaseTest {
         vm.prank(user1);
         source.harvest();
 
-        assertEq(source.yieldToken().balanceOf(user0), 6000);
-        assertEq(source.yieldToken().balanceOf(user1), 10000);
+        assertEq(TestToken(source.yieldToken()).balanceOf(user0), 6000);
+        assertEq(TestToken(source.yieldToken()).balanceOf(user1), 10000);
     }
 }

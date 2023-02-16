@@ -56,7 +56,7 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
     }
 
     function totalAssets() external view returns (uint256) {
-        return 0;
+        return this.totalSupply();
     }
 
     // -- ERC4642: Share conversion -- //
@@ -82,7 +82,7 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
     }
 
     function _cumulativeYield() private view returns (uint256) {
-        return harvestedYield + yieldSource.amountPending();
+        return harvestedYield + yieldSource.amountPending(address(this));
     }
 
     function _yieldPerToken() internal view returns (uint256) {
@@ -90,7 +90,7 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
 
         uint256 deltaBlocks = block.number - lastUpdateBlock;
         uint256 deltaYield = _cumulativeYield() - lastUpdateCumulativeYield;
-        return yieldPerTokenStored + (deltaYield * PRECISION_FACTOR) / deltaBlocks;
+        return yieldPerTokenStored + ((deltaYield * PRECISION_FACTOR) / deltaBlocks) / this.totalAssets();
 
         /* uint256 yield */
         /* return */
@@ -101,12 +101,16 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
 
     function _calculatePendingYield(address user) internal view returns (uint256) {
         UserInfo storage info = userInfos[user];
-        return ((this.balanceOf(user) * (_yieldPerToken() - info.accumulatedYieldPerToken)) / PRECISION_FACTOR)
+        return ((this.balanceOf(user) * (_yieldPerToken() - info.accumulatedYieldPerToken))) / PRECISION_FACTOR
             + info.accumulatedYield;
 
         /* return */
         /*     ((userInfo[user].shares * (_rewardPerToken() - (userInfo[user].userRewardPerTokenPaid))) / */
         /*         PRECISION_FACTOR) + userInfo[user].rewards; */
+    }
+
+    function calculatePendingYield(address user) external view returns (uint256) {
+        return _calculatePendingYield(user);
     }
 
     function _updateYield(address user) internal {

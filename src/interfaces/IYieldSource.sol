@@ -5,6 +5,5 @@ interface IYieldSource {
     function yieldToken() external view returns (address);
     function generatorToken() external view returns (address);
     function harvest() external;
-    function amountPending() external view returns (uint256);
-    function amountGenerator() external view returns (uint256);
+    function amountPending(address who) external view returns (uint256);
 }
