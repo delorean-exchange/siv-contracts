@@ -3,9 +3,10 @@ pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
 import "y2k-earthquake/interfaces/IVault.sol";
+import "openzeppelin/token/ERC20/IERC20.sol";
 import "../src/vaults/SelfInsuredVault.sol";
 
-contract InsuredGLPVaultTest is Test {
+contract SelfInsuredVaultTest is Test {
     uint256 arbitrumFork;
     string ARBITRUM_RPC_URL = vm.envString("ARBITRUM_RPC_URL");
 
@@ -13,19 +14,42 @@ contract InsuredGLPVaultTest is Test {
     address usdt = 0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9;
     address sGLP = 0x5402B5F40310bDED796c7D0F3FF6683f5C0cFfdf;
 
+    address glpWallet = 0x3aaF2aCA2a0A6b6ec227Bbc2bF5cEE86c2dC599d;
+
     SelfInsuredVault public vault;
 
-    function setUp() public {
-        arbitrumFork = vm.createFork(ARBITRUM_RPC_URL, 58729505);
+    function createUser(uint32 i) public returns (address) {
+        string memory mnemonic = "test test test test test test test test test test test junk";
+        uint256 privateKey = vm.deriveKey(mnemonic, i);
+        address user = vm.addr(privateKey);
+        vm.deal(user, 100 ether);
+        return user;
+    }
 
-        vault = new SelfInsuredVault("Self Insured GLP Vault",
-                                     "siGLP",
-                                     sGLP);
+    function setUp() public {
+        /* arbitrumFork = vm.createFork(ARBITRUM_RPC_URL, 58729505); */
+        arbitrumFork = vm.createFork(ARBITRUM_RPC_URL, 61330138);
+
+        vault = new SelfInsuredVault("Self Insured GLP Vault", "siGLP", sGLP);
+
     }
 
     function testCallToY2K() public {
         vm.selectFork(arbitrumFork);
         address token = IVault(y2kUSDTVault).tokenInsured();
         assertEq(token, usdt);
+    }
+
+    function testDepositWithdraw() public {
+        vm.selectFork(arbitrumFork);
+        console.log(IERC20(sGLP).balanceOf(glpWallet));
+
+        address user = createUser(0);
+
+        vm.prank(glpWallet);
+        IERC20(sGLP).transfer(user, 10e18);
+
+        console.log(IERC20(sGLP).balanceOf(glpWallet));
+        console.log(IERC20(sGLP).balanceOf(user));
     }
 }

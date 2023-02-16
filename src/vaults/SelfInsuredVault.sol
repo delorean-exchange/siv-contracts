@@ -25,14 +25,9 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
     }
 
     // -- ERC4642: Asset -- //
-    /* function asset() external override view returns (address) { */
-    /*     return address(0); */
-    /* } */
-
     function totalAssets() external override view returns (uint256) {
         return 0;
     }
-
 
     // -- ERC4642: Share conversion -- //
     function convertToShares(uint256 assets) external override view returns (uint256 shares) {
