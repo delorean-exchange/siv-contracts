@@ -1,4 +1,2 @@
 y2k-earthquake/=lib/Earthquake/src/
 openzeppelin/=lib/openzeppelin-contracts/contracts/
-gmx/=lib/gmx-contracts/contracts/
-

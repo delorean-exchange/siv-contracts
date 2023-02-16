@@ -5,8 +5,8 @@ import "forge-std/Test.sol";
 
 import "y2k-earthquake/interfaces/IVault.sol";
 import "openzeppelin/token/ERC20/IERC20.sol";
-import "gmx/staking/interfaces/IRewardTracker.sol"
 
+import "../src/interfaces/gmx/IRewardTracker.sol";
 import "../src/vaults/SelfInsuredVault.sol";
 
 contract SelfInsuredVaultTest is Test {
@@ -14,7 +14,7 @@ contract SelfInsuredVaultTest is Test {
     string ARBITRUM_RPC_URL = vm.envString("ARBITRUM_RPC_URL");
 
     IVault y2kUSDTVault = IVault(0x76b1803530A3608bD5F1e4a8bdaf3007d7d2D7FA);
-    IRewardTracker gmxRewardsTracker = IRewardTracker(0x4e971a87900b931ff39d1aad67697f49835400b6);
+    IRewardTracker gmxRewardsTracker = IRewardTracker(0x4e971a87900b931fF39d1Aad67697F49835400b6);
 
     IERC20 usdt = IERC20(0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9);
     IERC20 sGLP = IERC20(0x5402B5F40310bDED796c7D0F3FF6683f5C0cFfdf);
@@ -35,14 +35,14 @@ contract SelfInsuredVaultTest is Test {
         /* arbitrumFork = vm.createFork(ARBITRUM_RPC_URL, 58729505); */
         arbitrumFork = vm.createFork(ARBITRUM_RPC_URL, 61330138);
 
-        vault = new SelfInsuredVault("Self Insured GLP Vault", "siGLP", sGLP);
+        vault = new SelfInsuredVault("Self Insured GLP Vault", "siGLP", address(sGLP));
 
     }
 
     function testCallToY2K() public {
         vm.selectFork(arbitrumFork);
         address token = y2kUSDTVault.tokenInsured();
-        assertEq(token, usdt);
+        assertEq(token, address(usdt));
     }
 
     function testDepositWithdraw() public {
