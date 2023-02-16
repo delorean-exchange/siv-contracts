@@ -32,7 +32,7 @@ contract SelfInsuredVaultTest is BaseTest {
         assertEq(token, address(usdt));
     }
 
-    function testWithTestYieldSource() public {
+    function testYieldAccounting() public {
         TestYieldSource source = new TestYieldSource(200);
         IERC20 gt = IERC20(source.generatorToken());
         SelfInsuredVault vault = new SelfInsuredVault("Self Insured YS:G Vault",
