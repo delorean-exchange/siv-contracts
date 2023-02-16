@@ -4,6 +4,23 @@ pragma solidity ^0.8.4;
 import "./TestToken.sol";
 import "../interfaces/IYieldSource.sol";
 
+import "forge-std/console.sol";
+
+
+contract CallbackTestToken is TestToken {
+    address public callback;
+
+    constructor(string memory name, string memory symbol, uint256 initialSupply, address callback_) TestToken(name, symbol, initialSupply) {
+        callback = callback_;
+    }
+
+    function _transfer(address from, address to, uint256 amount) internal override {
+        TestYieldSource(callback).callback(to);
+        super._transfer(from, to, amount);
+    }
+}
+
+
 contract TestYieldSource is IYieldSource {
     uint256 public yieldPerBlock;
     uint256 public immutable startBlockNumber;
@@ -19,15 +36,32 @@ contract TestYieldSource is IYieldSource {
         yieldPerBlock = yieldPerBlock_;
 
         yieldToken = address(new TestToken("TestYS: Yield Token", "YS:Y", 0));
-        generatorToken = address(new TestToken("TestYS: Generator Token", "YS:G", 0));
+        generatorToken = address(new CallbackTestToken("TestYS: Generator Token", "YS:G", 0, address(this)));
     }
 
-    function setYieldPerBlock(uint256 yieldPerBlock_) public {
+    function callback(address who) public {
+        updateHolders(who);
+        checkpointPending();
+    }
+
+    function updateHolders(address who) public {
+        bool exists = false;
+        for (uint256 i = 0; i < holders.length; i++) {
+            exists = exists || holders[i] == who;
+        }
+        if (!exists) holders.push(who);
+    }
+
+    function checkpointPending() public {
         for (uint256 i = 0; i < holders.length; i++) {
             address holder = holders[i];
             pending[holder] += amountPending(holder);
             lastHarvestBlockNumber[holder] = block.number;
         }
+    }
+
+    function setYieldPerBlock(uint256 yieldPerBlock_) public {
+        checkpointPending();
         yieldPerBlock = yieldPerBlock_;
     }
 
@@ -46,10 +80,16 @@ contract TestYieldSource is IYieldSource {
     }
 
     function amountPending(address who) public virtual view returns (uint256) {
+        console.log("Get amount pending for", who);
+
         uint256 start = lastHarvestBlockNumber[who] == 0
             ? startBlockNumber
             : lastHarvestBlockNumber[who];
         uint256 deltaBlocks = block.number - start;
+
+        console.log("deltaBlocks", deltaBlocks);
+        console.log("yieldPerBlock", yieldPerBlock);
+
         uint256 total = TestToken(generatorToken).balanceOf(who) * deltaBlocks * yieldPerBlock;
         return total + pending[who];
     }

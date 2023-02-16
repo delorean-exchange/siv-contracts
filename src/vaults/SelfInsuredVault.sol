@@ -44,6 +44,8 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
                 string memory symbol_,
                 address yieldSource_) ERC20(name_, symbol_) {
         yieldSource = IYieldSource(yieldSource_);
+        rewardTokens = new address[](1);
+        rewardTokens[0] = IYieldSource(yieldSource_).yieldToken();
     }
 
     // -- ERC4642: Asset -- //
@@ -77,20 +79,33 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
         shares = assets;
     }
 
+    function _harvest() internal {
+        uint256 pending = yieldSource.amountPending(address(this));
+        yieldSource.harvest();
+        harvestedYield += pending;
+    }
+
     function cumulativeYield() external view returns (uint256) {
         return _cumulativeYield();
     }
 
     function _cumulativeYield() private view returns (uint256) {
-        return harvestedYield + yieldSource.amountPending(address(this));
+        uint256 ap = yieldSource.amountPending(address(this));
+        console.log("AP:", ap);
+        return harvestedYield + ap;
     }
 
     function _yieldPerToken() internal view returns (uint256) {
         if (this.totalAssets() == 0) return yieldPerTokenStored;
-
-        uint256 deltaBlocks = block.number - lastUpdateBlock;
+        if (block.number == lastUpdateBlock) return yieldPerTokenStored;
+        
+        /* uint256 deltaBlocks = block.number - lastUpdateBlock; */
         uint256 deltaYield = _cumulativeYield() - lastUpdateCumulativeYield;
-        return yieldPerTokenStored + ((deltaYield * PRECISION_FACTOR) / deltaBlocks) / this.totalAssets();
+
+        /* console.log("deltaBlocks", deltaBlocks); */
+        /* console.log("deltaYield ", deltaYield); */
+
+        return yieldPerTokenStored + (deltaYield * PRECISION_FACTOR) / this.totalAssets();
 
         /* uint256 yield */
         /* return */
@@ -101,7 +116,11 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
 
     function _calculatePendingYield(address user) internal view returns (uint256) {
         UserInfo storage info = userInfos[user];
-        return ((this.balanceOf(user) * (_yieldPerToken() - info.accumulatedYieldPerToken))) / PRECISION_FACTOR
+        uint256 ypt = _yieldPerToken();
+        /* console.log("YPT", ypt); */
+        /* console.log("BAL", this.balanceOf(user)); */
+        /* console.log("ACC", info.accumulatedYieldPerToken); */
+        return ((this.balanceOf(user) * (ypt - info.accumulatedYieldPerToken))) / PRECISION_FACTOR
             + info.accumulatedYield;
 
         /* return */
@@ -175,12 +194,33 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
     }
 
     // -- Rewards -- //
-    function previewClaim() external returns (uint256[] memory) {
-        return new uint256[](0);
+    function _previewClaim(address who) internal returns (uint256[] memory result) {
+        result = new uint256[](1);
+        result[0] = _calculatePendingYield(who);
+        return result;
+    }
+
+    function previewClaim(address who) external returns (uint256[] memory result) {
+        return _previewClaim(who);
     }
 
     function claim() external returns (uint256[] memory) {
-        return new uint256[](0);
+        _harvest();
+
+        uint256[] memory owed = _previewClaim(msg.sender);
+
+        require(owed.length == rewardTokens.length, "SIV: claim1");
+        require(rewardTokens[0] == yieldSource.yieldToken(), "SIV: claim2");
+
+        _updateYield(msg.sender);
+        require(owed[0] == userInfos[msg.sender].accumulatedYield, "SIV: claim3");
+
+        userInfos[msg.sender].accumulatedYield = 0;
+
+        for (uint8 i = 0; i < uint8(owed.length); i++) {
+            IERC20(rewardTokens[i]).safeTransfer(msg.sender, owed[i]);
+        }
+        return owed;
     }
 
     // -- Admin only -- //

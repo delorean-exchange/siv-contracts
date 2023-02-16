@@ -35,9 +35,14 @@ contract SelfInsuredVaultTest is BaseTest {
     function testYieldAccounting() public {
         TestYieldSource source = new TestYieldSource(200);
         IERC20 gt = IERC20(source.generatorToken());
+        IERC20 yt = IERC20(source.yieldToken());
         SelfInsuredVault vault = new SelfInsuredVault("Self Insured YS:G Vault",
                                                       "siYS:G",
                                                       address(source));
+
+        console.log("Vault:", address(vault));
+
+        uint256 before;
         address user0 = createUser(0);
         source.mintGenerator(user0, 10e18);
 
@@ -52,10 +57,111 @@ contract SelfInsuredVaultTest is BaseTest {
 
         assertEq(vault.cumulativeYield(), 0);
 
+        // Verify yield accounting with one user
         vm.roll(block.number + 1);
         assertEq(vault.cumulativeYield(), 400e18);
-        console.log("----");
         assertEq(vault.calculatePendingYield(user0), 400e18);
+        assertEq(yt.balanceOf(address(vault)), 0);
+        assertEq(yt.balanceOf(user0), 0);
+
+        vm.prank(user0);
+        vault.claim();
+
+        assertEq(yt.balanceOf(address(vault)), 0);
+        assertEq(yt.balanceOf(user0), 400e18);
+
+        vm.prank(user0);
+        vault.claim();
+        assertEq(yt.balanceOf(address(vault)), 0);
+        assertEq(yt.balanceOf(user0), 400e18);
+
+        // Advance multiple blocks
+        vm.roll(block.number + 2);
+        assertEq(vault.cumulativeYield(), 1200e18);
+        assertEq(vault.calculatePendingYield(user0), 800e18);
+
+        vm.roll(block.number + 3);
+        assertEq(vault.cumulativeYield(), 2400e18);
+        assertEq(vault.calculatePendingYield(user0), 2000e18);
+
+        assertEq(yt.balanceOf(address(vault)), 0);
+        assertEq(yt.balanceOf(user0), 400e18);
+
+        vm.prank(user0);
+        vault.claim();
+        assertEq(yt.balanceOf(address(vault)), 0);
+        assertEq(yt.balanceOf(user0), 2400e18);
+
+        // Advance multiple blocks, change yield rate, advance more blocks
+        vm.roll(block.number + 2);
+        assertEq(vault.cumulativeYield(), 3200e18);
+        assertEq(vault.calculatePendingYield(user0), 800e18);
+
+        before = source.amountPending(address(vault));
+        source.setYieldPerBlock(100);
+        assertEq(source.amountPending(address(vault)), before);
+
+        vm.roll(block.number + 1);
+        assertEq(vault.cumulativeYield(), 3400e18);
+        assertEq(vault.calculatePendingYield(user0), 1000e18);
+
+        vm.roll(block.number + 2);
+        assertEq(vault.cumulativeYield(), 3800e18);
+        assertEq(vault.calculatePendingYield(user0), 1400e18);
+
+        vm.prank(user0);
+        vault.claim();
+        assertEq(vault.cumulativeYield(), 3800e18);
+        assertEq(vault.calculatePendingYield(user0), 0);
+        assertEq(yt.balanceOf(address(vault)), 0);
+        assertEq(yt.balanceOf(user0), 3800e18);
+
+        // Add a second user
+        address user1 = createUser(1);
+        source.mintGenerator(user1, 20e18);
+        assertEq(vault.calculatePendingYield(user0), 0);
+        assertEq(vault.calculatePendingYield(user1), 0);
+
+        vm.roll(block.number + 1);
+        assertEq(vault.calculatePendingYield(user0), 200e18);
+        assertEq(vault.calculatePendingYield(user1), 0);
+
+        // Second user deposits
+        vm.startPrank(user1);
+        gt.approve(address(vault), 4e18);
+        assertEq(vault.previewDeposit(4e18), 4e18);
+        before = vault.cumulativeYield();
+        vault.deposit(4e18, user1);
+        assertEq(vault.cumulativeYield(), before);
+        assertEq(gt.balanceOf(user0), 8e18);
+        assertEq(gt.balanceOf(user1), 16e18);
+        assertEq(gt.balanceOf(address(vault)), 6e18);
+        assertEq(vault.balanceOf(user0), 2e18);
+        assertEq(vault.balanceOf(user1), 4e18);
+        assertEq(vault.totalAssets(), 6e18);
+        vm.stopPrank();
+
+        vm.roll(block.number + 1);
+        assertEq(vault.calculatePendingYield(user0), 400e18);
+        assertEq(vault.calculatePendingYield(user1), 400e18);
+
+        vm.roll(block.number + 1);
+        assertEq(vault.calculatePendingYield(user0), 600e18);
+        assertEq(vault.calculatePendingYield(user1), 800e18);
+
+        vm.roll(block.number + 2);
+        assertEq(vault.calculatePendingYield(user0), 1000e18);
+        assertEq(vault.calculatePendingYield(user1), 1600e18);
+
+        vm.prank(user0);
+        vault.claim();
+        assertEq(vault.calculatePendingYield(user0), 0);
+        assertEq(yt.balanceOf(user0), 4800e18);
+
+        vm.prank(user1);
+        vault.claim();
+        assertEq(vault.calculatePendingYield(user1), 0);
+        assertEq(yt.balanceOf(user1), 1600e18);
     }
 
     function testDepositWithdraw() public {
