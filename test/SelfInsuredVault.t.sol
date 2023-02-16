@@ -1,15 +1,14 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import "forge-std/Test.sol";
-
 import "y2k-earthquake/interfaces/IVault.sol";
 import "openzeppelin/token/ERC20/IERC20.sol";
 
+import "./BaseTest.sol";
 import "../src/interfaces/gmx/IRewardTracker.sol";
 import "../src/vaults/SelfInsuredVault.sol";
 
-contract SelfInsuredVaultTest is Test {
+contract SelfInsuredVaultTest is BaseTest {
     uint256 arbitrumFork;
     string ARBITRUM_RPC_URL = vm.envString("ARBITRUM_RPC_URL");
 
@@ -23,30 +22,20 @@ contract SelfInsuredVaultTest is Test {
 
     SelfInsuredVault public vault;
 
-    function createUser(uint32 i) public returns (address) {
-        string memory mnemonic = "test test test test test test test test test test test junk";
-        uint256 privateKey = vm.deriveKey(mnemonic, i);
-        address user = vm.addr(privateKey);
-        vm.deal(user, 100 ether);
-        return user;
-    }
-
     function setUp() public {
         /* arbitrumFork = vm.createFork(ARBITRUM_RPC_URL, 58729505); */
         arbitrumFork = vm.createFork(ARBITRUM_RPC_URL, 61330138);
+        vm.selectFork(arbitrumFork);
 
         vault = new SelfInsuredVault("Self Insured GLP Vault", "siGLP", address(sGLP));
-
     }
 
     function testCallToY2K() public {
-        vm.selectFork(arbitrumFork);
         address token = y2kUSDTVault.tokenInsured();
         assertEq(token, address(usdt));
     }
 
     function testDepositWithdraw() public {
-        vm.selectFork(arbitrumFork);
         console.log(sGLP.balanceOf(glpWallet));
 
         address user = createUser(0);
@@ -61,5 +50,24 @@ contract SelfInsuredVaultTest is Test {
 
         console.log("claimable", gmxRewardsTracker.claimable(glpWallet));
         console.log("claimable", gmxRewardsTracker.claimable(user));
+
+        /* console.log("block number", block.number); */
+        /* uint256 delta = 1000; */
+        /* vm.roll(block.number + delta); */
+        /* vm.warp(block.timestamp + 12 * delta); */
+        /* console.log("--\nblock number", block.number); */
+
+        /* console.log("claimable", gmxRewardsTracker.claimable(glpWallet)); */
+        /* console.log("claimable", gmxRewardsTracker.claimable(user)); */
+
+        // Deposit into the vault
+        vm.startPrank(user);
+        sGLP.approve(address(vault), 2e18);
+        assertEq(vault.previewDeposit(2e18), 2e18);
+        vault.deposit(2e18, user);
+        assertEq(sGLP.balanceOf(user), 8e18);
+        assertEq(sGLP.balanceOf(address(vault)), 2e18);
+        assertEq(vault.balanceOf(user), 2e18);
+        vm.stopPrank();
     }
 }
