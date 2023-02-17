@@ -14,7 +14,6 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
     using SafeERC20 for IERC20;
 
     struct UserInfo {
-        /* uint256 shares; // shares of token staked */
         uint256 accumulatedYieldPerToken;
         uint256 accumulatedYield;
     }
@@ -91,7 +90,6 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
 
     function _cumulativeYield() private view returns (uint256) {
         uint256 ap = yieldSource.amountPending(address(this));
-        console.log("AP:", ap);
         return harvestedYield + ap;
     }
 
@@ -99,33 +97,15 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
         if (this.totalAssets() == 0) return yieldPerTokenStored;
         if (block.number == lastUpdateBlock) return yieldPerTokenStored;
         
-        /* uint256 deltaBlocks = block.number - lastUpdateBlock; */
         uint256 deltaYield = _cumulativeYield() - lastUpdateCumulativeYield;
-
-        /* console.log("deltaBlocks", deltaBlocks); */
-        /* console.log("deltaYield ", deltaYield); */
-
         return yieldPerTokenStored + (deltaYield * PRECISION_FACTOR) / this.totalAssets();
-
-        /* uint256 yield */
-        /* return */
-        /*     rewardPerTokenStored + */
-        /*     ((_lastRewardBlock() - lastUpdateBlock) * (currentRewardPerBlock * PRECISION_FACTOR)) / */
-        /*     totalShares; */
     }
 
     function _calculatePendingYield(address user) internal view returns (uint256) {
         UserInfo storage info = userInfos[user];
         uint256 ypt = _yieldPerToken();
-        /* console.log("YPT", ypt); */
-        /* console.log("BAL", this.balanceOf(user)); */
-        /* console.log("ACC", info.accumulatedYieldPerToken); */
         return ((this.balanceOf(user) * (ypt - info.accumulatedYieldPerToken))) / PRECISION_FACTOR
             + info.accumulatedYield;
-
-        /* return */
-        /*     ((userInfo[user].shares * (_rewardPerToken() - (userInfo[user].userRewardPerTokenPaid))) / */
-        /*         PRECISION_FACTOR) + userInfo[user].rewards; */
     }
 
     function calculatePendingYield(address user) external view returns (uint256) {
