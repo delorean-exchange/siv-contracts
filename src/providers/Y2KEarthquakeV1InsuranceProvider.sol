@@ -28,10 +28,28 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable {
     }
 
     function rewardToken()  external override view returns (address) {
-        return address(0);
+        return address(0x65c936f008BC34fE819bce9Fa5afD9dc2d49977f);  // Y2K token
     }
 
-    function activeEpoch() external override view returns (uint256) {
+    // TODO: This method likely isn't needed for anything external
+    function currentEpoch() external override view returns (uint256) {
+        if (vault.epochsLength() == 0) return 0;
+
+        for (int256 i = int256(vault.epochsLength()) - 1; i >= 0; i--) {
+            uint256 epochId = vault.epochs(uint256(i));
+
+            console.log("--");
+            console.log("Block.timestamp:", block.timestamp);
+            console.log("vault.idEpochBegin(epochId)", vault.idEpochBegin(epochId));
+            console.log("vault epoch did begin?    ", block.timestamp > vault.idEpochBegin(epochId));
+            console.log("vault.idEpochEnded(epochId)", vault.idEpochEnded(epochId));
+            console.log("--");
+
+            if (block.timestamp > vault.idEpochBegin(epochId) && !vault.idEpochEnded(epochId)) {
+                return epochId;
+            }
+        }
+
         return 0;
     }
 
@@ -39,11 +57,19 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable {
         return 0;
     }
 
-    function isNextEpochOpen() external override view returns (bool) {
+    function isNextEpochPurchasable() external override view returns (bool) {
         return false;
     }
 
-    function purchaseInsurance(address beneficiary, uint256 amountPremium) external override {
+    function nextEpochPurchased(address who) external returns (uint256) {
+        return 0;
+    }
+
+    function currentEpochPurchased(address who) external returns (uint256) {
+        return 0;
+    }
+
+    function purchaseForNextEpoch(address beneficiary, uint256 amountPremium) external override {
     }
 
     function pendingPayout(address who, uint256 epochId) external override view returns (uint256) {

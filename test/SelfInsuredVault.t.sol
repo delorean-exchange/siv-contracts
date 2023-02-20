@@ -16,9 +16,7 @@ contract SelfInsuredVaultTest is BaseTest {
         TestYieldSource source = new TestYieldSource(200);
         IERC20 gt = IERC20(source.generatorToken());
         IERC20 yt = IERC20(source.yieldToken());
-        SelfInsuredVault vault = new SelfInsuredVault("Self Insured YS:G Vault",
-                                                      "siYS:G",
-                                                      address(source));
+        SelfInsuredVault vault = new SelfInsuredVault("Self Insured YS:G Vault", "siYS:G", address(source));
 
         console.log("Vault:", address(vault));
 
@@ -217,9 +215,7 @@ contract SelfInsuredVaultTest is BaseTest {
     function testDepositWithdraw() public {
         vm.selectFork(vm.createFork(ARBITRUM_RPC_URL, 61330138));
 
-        SelfInsuredVault vault = new SelfInsuredVault("Self Insured GLP Vault",
-                                                      "siGLP",
-                                                      address(sGLP));
+        SelfInsuredVault vault = new SelfInsuredVault("Self Insured GLP Vault", "siGLP", address(sGLP));
 
         console.log(sGLP.balanceOf(glpWallet));
 
