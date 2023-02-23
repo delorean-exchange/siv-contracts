@@ -4,8 +4,9 @@ pragma solidity ^0.8.13;
 import "forge-std/Test.sol";
 
 import "openzeppelin/token/ERC20/IERC20.sol";
-import "y2k-earthquake/src/interfaces/IVault.sol";
+/* import "y2k-earthquake/src/interfaces/IVault.sol"; */
 
+import "../src/interfaces/IWrappedETH.sol";
 import "../src/interfaces/gmx/IRewardTracker.sol";
 
 contract BaseTest is Test {
@@ -19,7 +20,9 @@ contract BaseTest is Test {
         string memory mnemonic = "test test test test test test test test test test test junk";
         uint256 privateKey = vm.deriveKey(mnemonic, i);
         address user = vm.addr(privateKey);
-        vm.deal(user, 100 ether);
+        vm.deal(user, 200 ether);
+        vm.prank(user);
+        IWrappedETH(address(weth)).deposit{value: 100 ether}();
         return user;
     }
 }

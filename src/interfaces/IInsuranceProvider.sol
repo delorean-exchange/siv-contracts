@@ -1,11 +1,13 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.13;
 
+import { IERC20 } from "openzeppelin/token/ERC20/IERC20.sol";
+
 interface IInsuranceProvider {
     // ---- Token specification ---- //
-    function insuredToken() external view returns (address);
-    function paymentToken() external view returns (address);
-    function rewardToken()  external view returns (address);
+    function insuredToken() external view returns (IERC20);
+    function paymentToken() external view returns (IERC20);
+    function rewardToken()  external view returns (IERC20);
 
     // ---- Epoch management ---- //
     function currentEpoch() external view returns (uint256);
