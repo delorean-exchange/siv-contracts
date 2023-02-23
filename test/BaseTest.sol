@@ -4,7 +4,7 @@ pragma solidity ^0.8.13;
 import "forge-std/Test.sol";
 
 import "openzeppelin/token/ERC20/IERC20.sol";
-import "y2k-earthquake/interfaces/IVault.sol";
+import "y2k-earthquake/src/interfaces/IVault.sol";
 
 import "../src/interfaces/gmx/IRewardTracker.sol";
 

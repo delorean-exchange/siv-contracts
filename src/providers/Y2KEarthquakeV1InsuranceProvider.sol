@@ -3,7 +3,7 @@ pragma solidity ^0.8.13;
 
 import "forge-std/console.sol";
 import { Ownable } from "openzeppelin/access/Ownable.sol";
-import "y2k-earthquake/Vault.sol";
+import "y2k-earthquake/src/Vault.sol";
 
 import "../interfaces/IInsuranceProvider.sol";
 
@@ -35,16 +35,9 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable {
     function currentEpoch() external override view returns (uint256) {
         if (vault.epochsLength() == 0) return 0;
 
+        // TODO: We only need to check at most the last two epochs
         for (int256 i = int256(vault.epochsLength()) - 1; i >= 0; i--) {
             uint256 epochId = vault.epochs(uint256(i));
-
-            console.log("--");
-            console.log("Block.timestamp:", block.timestamp);
-            console.log("vault.idEpochBegin(epochId)", vault.idEpochBegin(epochId));
-            console.log("vault epoch did begin?    ", block.timestamp > vault.idEpochBegin(epochId));
-            console.log("vault.idEpochEnded(epochId)", vault.idEpochEnded(epochId));
-            console.log("--");
-
             if (block.timestamp > vault.idEpochBegin(epochId) && !vault.idEpochEnded(epochId)) {
                 return epochId;
             }
@@ -54,6 +47,10 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable {
     }
 
     function nextEpoch() external override view returns (uint256) {
+        uint256 len = vault.epochsLength();
+        if (len == 0) return 0;
+        uint256 epochId = vault.epochs(len - 1);
+        if (block.timestamp <= vault.idEpochBegin(epochId)) return 0;
         return 0;
     }
 
