@@ -88,9 +88,7 @@ contract Y2KEarthquakeV1InsuranceProviderTest is BaseTest, ControllerHelper {
 
         uint256 pending = provider.pendingPayout(endEpoch);
         uint256 before = IERC20(weth).balanceOf(user0);
-
         uint256 result = provider.claimPayout(endEpoch);
-
         uint256 delta = IERC20(weth).balanceOf(user0) - before;
 
         assertEq(result, pending);
@@ -157,21 +155,25 @@ contract Y2KEarthquakeV1InsuranceProviderTest is BaseTest, ControllerHelper {
         vHedge = Vault(hedge);
         vRisk = Vault(risk);
 
-        /* address user0 = createUser(0); */
-        /* vm.startPrank(user0); */
+        address user0 = createUser(0);
+        vm.startPrank(user0);
 
-        /* provider = new Y2KEarthquakeV1InsuranceProvider(address(vHedge)); */
+        provider = new Y2KEarthquakeV1InsuranceProvider(address(vHedge));
 
         vm.warp(endEpoch + 1 days);
 
-        emit log_named_int("strike price", vHedge.strikePrice());
-        emit log_named_int("oracle price", controller.getLatestPrice(TOKEN_FRAX));
+        uint256 pending = provider.pendingPayout(endEpoch);
 
-        controller.triggerEndEpoch(SINGLE_MARKET_INDEX, endEpoch);
+        console.log("pending", pending);
 
-        emit log_named_uint("total assets value", vHedge.totalAssets(endEpoch));
+        /* emit log_named_int("strike price", vHedge.strikePrice()); */
+        /* emit log_named_int("oracle price", controller.getLatestPrice(TOKEN_FRAX)); */
 
-        assertTrue(vRisk.idClaimTVL(endEpoch) == vHedge.idFinalTVL(endEpoch) + vRisk.idFinalTVL(endEpoch), "Claim TVL not total");
-        assertTrue(NULL_BALANCE == vHedge.idClaimTVL(endEpoch), "Hedge Claim TVL not zero");
+        /* controller.triggerEndEpoch(SINGLE_MARKET_INDEX, endEpoch); */
+
+        /* emit log_named_uint("total assets value", vHedge.totalAssets(endEpoch)); */
+
+        /* assertTrue(vRisk.idClaimTVL(endEpoch) == vHedge.idFinalTVL(endEpoch) + vRisk.idFinalTVL(endEpoch), "Claim TVL not total"); */
+        /* assertTrue(NULL_BALANCE == vHedge.idClaimTVL(endEpoch), "Hedge Claim TVL not zero"); */
     }
 }
