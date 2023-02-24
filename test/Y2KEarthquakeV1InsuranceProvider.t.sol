@@ -145,9 +145,7 @@ contract Y2KEarthquakeV1InsuranceProviderTest is BaseTest, ControllerHelper {
     }
 
     function testTriggerNoDepeg() public {
-
         testDeposit();
-
 
         hedge = vaultFactory.getVaults(1)[0];
         risk = vaultFactory.getVaults(1)[1];
@@ -159,21 +157,21 @@ contract Y2KEarthquakeV1InsuranceProviderTest is BaseTest, ControllerHelper {
         vm.startPrank(user0);
 
         provider = new Y2KEarthquakeV1InsuranceProvider(address(vHedge));
+        IERC20(weth).approve(address(provider), 10 ether);
+        provider.purchaseForNextEpoch(10 ether);
 
         vm.warp(endEpoch + 1 days);
+        controller.triggerEndEpoch(SINGLE_MARKET_INDEX, endEpoch);
 
         uint256 pending = provider.pendingPayout(endEpoch);
+        uint256 before = IERC20(weth).balanceOf(user0);
+        uint256 result = provider.claimPayout(endEpoch);
+        uint256 delta = IERC20(weth).balanceOf(user0) - before;
 
-        console.log("pending", pending);
+        assertEq(pending, 0);
+        assertEq(result, 0);
+        assertEq(delta, 0);
 
-        /* emit log_named_int("strike price", vHedge.strikePrice()); */
-        /* emit log_named_int("oracle price", controller.getLatestPrice(TOKEN_FRAX)); */
-
-        /* controller.triggerEndEpoch(SINGLE_MARKET_INDEX, endEpoch); */
-
-        /* emit log_named_uint("total assets value", vHedge.totalAssets(endEpoch)); */
-
-        /* assertTrue(vRisk.idClaimTVL(endEpoch) == vHedge.idFinalTVL(endEpoch) + vRisk.idFinalTVL(endEpoch), "Claim TVL not total"); */
-        /* assertTrue(NULL_BALANCE == vHedge.idClaimTVL(endEpoch), "Hedge Claim TVL not zero"); */
+        vm.stopPrank();
     }
 }

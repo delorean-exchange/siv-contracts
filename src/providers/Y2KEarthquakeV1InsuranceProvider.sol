@@ -84,6 +84,7 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
     }
 
     function pendingPayout(uint256 epochId) external override view returns (uint256) {
+        if (vault.idFinalTVL(epochId) == 0) return 0;
         uint256 assets = vault.balanceOf(address(this), epochId);
         uint256 entitledShares = vault.previewWithdraw(epochId, assets);
         // Mirror Y2K Vault logic for deducting fee
