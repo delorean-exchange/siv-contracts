@@ -68,22 +68,22 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
         return id > 0 && block.timestamp <= vault.idEpochBegin(id);
     }
 
-    function nextEpochPurchased(address) external returns (uint256) {
+    function nextEpochPurchased() external returns (uint256) {
         return vault.balanceOf(address(this), _nextEpoch());
     }
 
-    function currentEpochPurchased(address) external returns (uint256) {
+    function currentEpochPurchased() external returns (uint256) {
         return vault.balanceOf(address(this), _currentEpoch());
     }
 
-    function purchaseForNextEpoch(address, uint256 amountPremium) external override {
+    function purchaseForNextEpoch(uint256 amountPremium) external override {
         paymentToken.safeTransferFrom(msg.sender, address(this), amountPremium);
         paymentToken.approve(address(vault), 0);
         paymentToken.approve(address(vault), amountPremium);
         vault.deposit(_nextEpoch(), amountPremium, address(this));
     }
 
-    function pendingPayout(address who, uint256 epochId) external override view returns (uint256) {
+    function pendingPayout(uint256 epochId) external override view returns (uint256) {
         uint256 assets = vault.balanceOf(address(this), epochId);
         uint256 entitledShares = vault.previewWithdraw(epochId, assets);
         // Mirror Y2K Vault logic for deducting fee
@@ -95,18 +95,18 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
         return entitledShares;
     }
 
-    function claimPayout(address receiver, uint256 epochId) external override returns (uint256) {
+    function claimPayout(uint256 epochId) external override returns (uint256) {
         uint256 assets = vault.balanceOf(address(this), epochId);
         uint256 amount = vault.withdraw(epochId, assets, address(this), address(this));
         paymentToken.safeTransfer(beneficiary, amount);
         return amount;
     }
 
-    function pendingRewards(address who) external override view returns (uint256) {
+    function pendingRewards() external override view returns (uint256) {
         return 0;
     }
 
-    function claimRewards(address receiver) external override returns (uint256) {
+    function claimRewards() external override returns (uint256) {
         return 0;
     }
 }

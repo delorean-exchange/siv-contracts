@@ -57,29 +57,7 @@ contract Y2KEarthquakeV1InsuranceProviderTest is BaseTest, ControllerHelper {
     }
 
     // -- Depeg scenario -- //
-    // From Y2K ControllerTest
-    function testY2KControllerDepeg() public {
-        depositDepeg();
-
-        hedge = vaultFactory.getVaults(1)[0];
-        risk = vaultFactory.getVaults(1)[1];
-
-        vHedge = Vault(hedge);
-        vRisk = Vault(risk);
-
-        vm.warp(beginEpoch + 10 days);
-
-        emit log_named_int("strike price", vHedge.strikePrice());
-        emit log_named_int("oracle price", controller.getLatestPrice(TOKEN_FRAX));
-        assertTrue(controller.getLatestPrice(TOKEN_FRAX) > 900000000000000000 && controller.getLatestPrice(TOKEN_FRAX) < 1000000000000000000);
-        assertTrue(vHedge.strikePrice() > 900000000000000000 && controller.getLatestPrice(TOKEN_FRAX) < 1000000000000000000);
-
-        controller.triggerDepeg(SINGLE_MARKET_INDEX, endEpoch);
-
-        assertTrue(vHedge.totalAssets(endEpoch) == vRisk.idClaimTVL(endEpoch), "Claim TVL Risk not equal to Total Tvl Hedge");
-        assertTrue(vRisk.totalAssets(endEpoch) == vHedge.idClaimTVL(endEpoch), "Claim TVL Hedge not equal to Total Tvl Risk");
-    }
-
+    // Based on Y2K ControllerTest
     function testTriggerDepeg() public {
         depositDepeg();
 
@@ -95,29 +73,105 @@ contract Y2KEarthquakeV1InsuranceProviderTest is BaseTest, ControllerHelper {
         provider = new Y2KEarthquakeV1InsuranceProvider(address(vHedge));
 
         IERC20(weth).approve(address(provider), 10 ether);
-        assertEq(provider.nextEpochPurchased(user0), 0);
-        provider.purchaseForNextEpoch(user0, 10 ether);
+        assertEq(provider.nextEpochPurchased(), 0);
+        provider.purchaseForNextEpoch(10 ether);
 
-        assertEq(provider.nextEpochPurchased(user0), 10 ether);
-        assertEq(provider.currentEpochPurchased(user0), 0);
+        assertEq(provider.nextEpochPurchased(), 10 ether);
+        assertEq(provider.currentEpochPurchased(), 0);
 
         vm.warp(beginEpoch + 10 days);
 
-        assertEq(provider.nextEpochPurchased(user0), 0);
-        assertEq(provider.currentEpochPurchased(user0), 10 ether);
+        assertEq(provider.nextEpochPurchased(), 0);
+        assertEq(provider.currentEpochPurchased(), 10 ether);
 
         controller.triggerDepeg(SINGLE_MARKET_INDEX, endEpoch);
 
-        uint256 pending = provider.pendingPayout(user0, endEpoch);
+        uint256 pending = provider.pendingPayout(endEpoch);
         uint256 before = IERC20(weth).balanceOf(user0);
 
-        uint256 result = provider.claimPayout(user0, endEpoch);
+        uint256 result = provider.claimPayout(endEpoch);
 
         uint256 delta = IERC20(weth).balanceOf(user0) - before;
 
         assertEq(result, pending);
         assertEq(delta, result);
 
-        vm.stopPrank(user0);
+        vm.stopPrank();
+    }
+
+    // From Y2K ControllerTest
+    function testDeposit() public {
+        vm.deal(ALICE, AMOUNT);
+        vm.deal(BOB, AMOUNT * BOB_MULTIPLIER);
+        vm.deal(CHAD, AMOUNT * CHAD_MULTIPLIER);
+        vm.deal(DEGEN, AMOUNT * DEGEN_MULTIPLIER);
+
+        vm.prank(ADMIN);
+        vaultFactory.createNewMarket(FEE, TOKEN_FRAX, DEPEG_AAA, beginEpoch, endEpoch, ORACLE_FRAX, "y2kFRAX_99*");
+
+        hedge = vaultFactory.getVaults(1)[0];
+        risk = vaultFactory.getVaults(1)[1];
+
+        vHedge = Vault(hedge);
+        vRisk = Vault(risk);
+
+        //ALICE hedge deposit
+        vm.startPrank(ALICE);
+        ERC20(WETH).approve(hedge, AMOUNT);
+        vHedge.depositETH{value: AMOUNT}(endEpoch, ALICE);
+        vm.stopPrank();
+
+        //BOB hedge deposit
+        vm.startPrank(BOB);
+        ERC20(WETH).approve(hedge, AMOUNT * BOB_MULTIPLIER);
+        vHedge.depositETH{value: AMOUNT * BOB_MULTIPLIER}(endEpoch, BOB);
+
+        assertTrue(vHedge.balanceOf(BOB,endEpoch) == AMOUNT * BOB_MULTIPLIER);
+        vm.stopPrank();
+
+        //CHAD risk deposit
+        vm.startPrank(CHAD);
+        ERC20(WETH).approve(risk, AMOUNT * CHAD_MULTIPLIER);
+        vRisk.depositETH{value: AMOUNT * CHAD_MULTIPLIER}(endEpoch, CHAD);
+
+        assertTrue(vRisk.balanceOf(CHAD,endEpoch) == (AMOUNT * CHAD_MULTIPLIER));
+        vm.stopPrank();
+
+        //DEGEN risk deposit
+        vm.startPrank(DEGEN);
+        ERC20(WETH).approve(risk, AMOUNT * DEGEN_MULTIPLIER);
+        vRisk.depositETH{value: AMOUNT * DEGEN_MULTIPLIER}(endEpoch, DEGEN);
+
+        assertTrue(vRisk.balanceOf(DEGEN,endEpoch) == (AMOUNT * DEGEN_MULTIPLIER));
+        vm.stopPrank();
+    }
+
+    function testTriggerNoDepeg() public {
+
+        testDeposit();
+
+
+        hedge = vaultFactory.getVaults(1)[0];
+        risk = vaultFactory.getVaults(1)[1];
+
+        vHedge = Vault(hedge);
+        vRisk = Vault(risk);
+
+        /* address user0 = createUser(0); */
+        /* vm.startPrank(user0); */
+
+        /* provider = new Y2KEarthquakeV1InsuranceProvider(address(vHedge)); */
+
+        vm.warp(endEpoch + 1 days);
+
+        emit log_named_int("strike price", vHedge.strikePrice());
+        emit log_named_int("oracle price", controller.getLatestPrice(TOKEN_FRAX));
+
+        controller.triggerEndEpoch(SINGLE_MARKET_INDEX, endEpoch);
+
+        emit log_named_uint("total assets value", vHedge.totalAssets(endEpoch));
+
+        assertTrue(vRisk.idClaimTVL(endEpoch) == vHedge.idFinalTVL(endEpoch) + vRisk.idFinalTVL(endEpoch), "Claim TVL not total");
+        assertTrue(NULL_BALANCE == vHedge.idClaimTVL(endEpoch), "Hedge Claim TVL not zero");
     }
 }
