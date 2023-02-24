@@ -90,14 +90,13 @@ contract Y2KEarthquakeV1InsuranceProviderTest is BaseTest, ControllerHelper {
         vRisk = Vault(risk);
 
         address user0 = createUser(0);
+        vm.startPrank(user0);
 
         provider = new Y2KEarthquakeV1InsuranceProvider(address(vHedge));
 
-        vm.startPrank(user0);
         IERC20(weth).approve(address(provider), 10 ether);
         assertEq(provider.nextEpochPurchased(user0), 0);
         provider.purchaseForNextEpoch(user0, 10 ether);
-        vm.stopPrank();
 
         assertEq(provider.nextEpochPurchased(user0), 10 ether);
         assertEq(provider.currentEpochPurchased(user0), 0);
@@ -107,14 +106,18 @@ contract Y2KEarthquakeV1InsuranceProviderTest is BaseTest, ControllerHelper {
         assertEq(provider.nextEpochPurchased(user0), 0);
         assertEq(provider.currentEpochPurchased(user0), 10 ether);
 
-        /* emit log_named_int("strike price", vHedge.strikePrice()); */
-        /* emit log_named_int("oracle price", controller.getLatestPrice(TOKEN_FRAX)); */
-        /* assertTrue(controller.getLatestPrice(TOKEN_FRAX) > 900000000000000000 && controller.getLatestPrice(TOKEN_FRAX) < 1000000000000000000); */
-        /* assertTrue(vHedge.strikePrice() > 900000000000000000 && controller.getLatestPrice(TOKEN_FRAX) < 1000000000000000000); */
+        controller.triggerDepeg(SINGLE_MARKET_INDEX, endEpoch);
 
-        /* controller.triggerDepeg(SINGLE_MARKET_INDEX, endEpoch); */
+        uint256 pending = provider.pendingPayout(user0, endEpoch);
+        uint256 before = IERC20(weth).balanceOf(user0);
 
-        /* assertTrue(vHedge.totalAssets(endEpoch) == vRisk.idClaimTVL(endEpoch), "Claim TVL Risk not equal to Total Tvl Hedge"); */
-        /* assertTrue(vRisk.totalAssets(endEpoch) == vHedge.idClaimTVL(endEpoch), "Claim TVL Hedge not equal to Total Tvl Risk"); */
+        uint256 result = provider.claimPayout(user0, endEpoch);
+
+        uint256 delta = IERC20(weth).balanceOf(user0) - before;
+
+        assertEq(result, pending);
+        assertEq(delta, result);
+
+        vm.stopPrank(user0);
     }
 }
