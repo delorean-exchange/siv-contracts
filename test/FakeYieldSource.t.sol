@@ -3,12 +3,12 @@ pragma solidity ^0.8.13;
 
 import "./BaseTest.sol";
 
-import "./helpers/TestToken.sol";
-import "./helpers/TestYieldSource.sol";
+import "./helpers/FakeToken.sol";
+import "./helpers/FakeYieldSource.sol";
 
-contract TestYieldSourceTest is BaseTest {
+contract FakeYieldSourceTest is BaseTest {
     function testYieldSource() public {
-        TestYieldSource source = new TestYieldSource(200);
+        FakeYieldSource source = new FakeYieldSource(200);
 
         address user0 = createUser(0);
         assertEq(source.amountPending(user0), 0);
@@ -22,7 +22,7 @@ contract TestYieldSourceTest is BaseTest {
         vm.prank(user0);
         source.harvest();
         assertEq(source.amountPending(user0), 0);
-        assertEq(TestToken(source.yieldToken()).balanceOf(user0), 2000);
+        assertEq(FakeToken(source.yieldToken()).balanceOf(user0), 2000);
 
         address user1 = createUser(1);
         assertEq(source.amountPending(user1), 0);
@@ -42,12 +42,12 @@ contract TestYieldSourceTest is BaseTest {
         vm.prank(user1);
         source.harvest();
 
-        assertEq(TestToken(source.yieldToken()).balanceOf(user0), 6000);
-        assertEq(TestToken(source.yieldToken()).balanceOf(user1), 10000);
+        assertEq(FakeToken(source.yieldToken()).balanceOf(user0), 6000);
+        assertEq(FakeToken(source.yieldToken()).balanceOf(user1), 10000);
     }
 
     function testChangingYieldRate() public {
-        TestYieldSource source = new TestYieldSource(200);
+        FakeYieldSource source = new FakeYieldSource(200);
 
         address user0 = createUser(0);
         assertEq(source.amountPending(user0), 0);
@@ -80,7 +80,7 @@ contract TestYieldSourceTest is BaseTest {
         vm.prank(user1);
         source.harvest();
 
-        assertEq(TestToken(source.yieldToken()).balanceOf(user0), 6000);
-        assertEq(TestToken(source.yieldToken()).balanceOf(user1), 3000);
+        assertEq(FakeToken(source.yieldToken()).balanceOf(user0), 6000);
+        assertEq(FakeToken(source.yieldToken()).balanceOf(user1), 3000);
     }
 }

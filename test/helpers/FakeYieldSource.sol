@@ -1,27 +1,27 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.4;
 
-import "./TestToken.sol";
+import "./FakeToken.sol";
 import "../../src/interfaces/IYieldSource.sol";
 
 import "forge-std/console.sol";
 
 
-contract CallbackTestToken is TestToken {
+contract CallbackFakeToken is FakeToken {
     address public callback;
 
-    constructor(string memory name, string memory symbol, uint256 initialSupply, address callback_) TestToken(name, symbol, initialSupply) {
+    constructor(string memory name, string memory symbol, uint256 initialSupply, address callback_) FakeToken(name, symbol, initialSupply) {
         callback = callback_;
     }
 
     function _transfer(address from, address to, uint256 amount) internal override {
-        TestYieldSource(callback).callback(to);
+        FakeYieldSource(callback).callback(to);
         super._transfer(from, to, amount);
     }
 }
 
 
-contract TestYieldSource is IYieldSource {
+contract FakeYieldSource is IYieldSource {
     uint256 public yieldPerBlock;
     uint256 public immutable startBlockNumber;
     mapping(address => uint256) public lastHarvestBlockNumber;
@@ -35,8 +35,8 @@ contract TestYieldSource is IYieldSource {
         startBlockNumber = block.number;
         yieldPerBlock = yieldPerBlock_;
 
-        yieldToken = address(new TestToken("TestYS: Yield Token", "YS:Y", 0));
-        generatorToken = address(new CallbackTestToken("TestYS: Generator Token", "YS:G", 0, address(this)));
+        yieldToken = address(new FakeToken("TestYS: Yield Token", "YS:Y", 0));
+        generatorToken = address(new CallbackFakeToken("TestYS: Generator Token", "YS:G", 0, address(this)));
     }
 
     function callback(address who) public {
@@ -66,15 +66,15 @@ contract TestYieldSource is IYieldSource {
     }
 
     function mintGenerator(address who, uint256 amount) public {
-        require(TestToken(generatorToken).balanceOf(who) == 0, "TYS: non-zero mint");
-        TestToken(generatorToken).publicMint(who, amount);
+        require(FakeToken(generatorToken).balanceOf(who) == 0, "TYS: non-zero mint");
+        FakeToken(generatorToken).publicMint(who, amount);
         lastHarvestBlockNumber[who] = block.number;
         holders.push(who);
     }
 
     function harvest() public {
         uint256 amount = this.amountPending(msg.sender);
-        TestToken(yieldToken).publicMint(msg.sender, amount);
+        FakeToken(yieldToken).publicMint(msg.sender, amount);
         lastHarvestBlockNumber[msg.sender] = block.number;
         pending[msg.sender] = 0;
     }
@@ -90,7 +90,7 @@ contract TestYieldSource is IYieldSource {
         console.log("deltaBlocks", deltaBlocks);
         console.log("yieldPerBlock", yieldPerBlock);
 
-        uint256 total = TestToken(generatorToken).balanceOf(who) * deltaBlocks * yieldPerBlock;
+        uint256 total = FakeToken(generatorToken).balanceOf(who) * deltaBlocks * yieldPerBlock;
         return total + pending[who];
     }
 }

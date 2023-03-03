@@ -4,7 +4,7 @@ pragma solidity ^0.8.13;
 import "openzeppelin/token/ERC20/IERC20.sol";
 
 import "./BaseTest.sol";
-import "./helpers/TestYieldSource.sol";
+import "./helpers/FakeYieldSource.sol";
 import "../src/vaults/SelfInsuredVault.sol";
 
 contract SelfInsuredVaultTest is BaseTest {
@@ -13,7 +13,7 @@ contract SelfInsuredVaultTest is BaseTest {
     IRewardTracker public gmxRewardsTracker = IRewardTracker(0x4e971a87900b931fF39d1Aad67697F49835400b6);
 
     function testYieldAccounting() public {
-        TestYieldSource source = new TestYieldSource(200);
+        FakeYieldSource source = new FakeYieldSource(200);
         IERC20 gt = IERC20(source.generatorToken());
         IERC20 yt = IERC20(source.yieldToken());
         SelfInsuredVault vault = new SelfInsuredVault("Self Insured YS:G Vault", "siYS:G", address(source));
