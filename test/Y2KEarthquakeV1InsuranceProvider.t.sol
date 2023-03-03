@@ -53,7 +53,7 @@ contract Y2KEarthquakeV1InsuranceProviderTest is BaseTest, ControllerHelper {
         forkToNoActiveEpoch();
 
         assertEq(provider.currentEpoch(), 0);
-        assertEq(provider.nextEpoch(), 0);
+        assertEq(provider.nextEpoch(), 1676246400);
     }
 
     // -- Depeg scenario -- //
@@ -86,13 +86,13 @@ contract Y2KEarthquakeV1InsuranceProviderTest is BaseTest, ControllerHelper {
 
         controller.triggerDepeg(SINGLE_MARKET_INDEX, endEpoch);
 
-        uint256 pending = provider.pendingPayout(endEpoch);
+        uint256 pending = provider.pendingPayouts();
         uint256 before = IERC20(weth).balanceOf(user0);
-        uint256 result = provider.claimPayout(endEpoch);
+        uint256 result = provider.claimPayouts();
         uint256 delta = IERC20(weth).balanceOf(user0) - before;
 
-        assertEq(result, pending);
-        assertEq(delta, result);
+        assertEq(result, pending, "result == pending");
+        assertEq(delta, result, "delta == result");
 
         vm.stopPrank();
     }
@@ -163,9 +163,9 @@ contract Y2KEarthquakeV1InsuranceProviderTest is BaseTest, ControllerHelper {
         vm.warp(endEpoch + 1 days);
         controller.triggerEndEpoch(SINGLE_MARKET_INDEX, endEpoch);
 
-        uint256 pending = provider.pendingPayout(endEpoch);
+        uint256 pending = provider.pendingPayouts();
         uint256 before = IERC20(weth).balanceOf(user0);
-        uint256 result = provider.claimPayout(endEpoch);
+        uint256 result = provider.claimPayouts();
         uint256 delta = IERC20(weth).balanceOf(user0) - before;
 
         assertEq(pending, 0);

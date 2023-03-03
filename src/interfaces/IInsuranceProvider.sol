@@ -22,8 +22,8 @@ interface IInsuranceProvider {
     function purchaseForNextEpoch(uint256 amountPremium) external;
 
     // ---- Payout management ---- //
-    function pendingPayout(uint256 epochId) external view returns (uint256);
-    function claimPayout(uint256 epochId) external returns (uint256);
+    function pendingPayouts() external view returns (uint256);
+    function claimPayouts() external returns (uint256);
     function pendingRewards() external view returns (uint256);
     function claimRewards() external returns (uint256);
 }

@@ -21,9 +21,13 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
 
     address public immutable beneficiary;
 
+    uint256 public claimedEpochIndex;
+
     constructor(address vault_) {
         setInsuranceVault(vault_);
         beneficiary = msg.sender;
+
+        claimedEpochIndex = 0;
     }
 
     function setInsuranceVault(address vault_) public onlyOwner {
@@ -83,7 +87,7 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
         vault.deposit(_nextEpoch(), amountPremium, address(this));
     }
 
-    function pendingPayout(uint256 epochId) external override view returns (uint256) {
+    function _pendingPayoutForEpoch(uint256 epochId) internal view returns (uint256) {
         if (vault.idFinalTVL(epochId) == 0) return 0;
         uint256 assets = vault.balanceOf(address(this), epochId);
         uint256 entitledShares = vault.previewWithdraw(epochId, assets);
@@ -96,9 +100,28 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
         return entitledShares;
     }
 
-    function claimPayout(uint256 epochId) external override returns (uint256) {
+    function pendingPayouts() external override view returns (uint256) {
+        uint256 pending = 0;
+        uint256 len = vault.epochsLength();
+        for (uint256 i = claimedEpochIndex; i < len; i++) {
+            pending += _pendingPayoutForEpoch(vault.epochs(i));
+        }
+        return pending;
+    }
+
+    function _claimPayoutForEpoch(uint256 epochId) internal returns (uint256) {
         uint256 assets = vault.balanceOf(address(this), epochId);
         uint256 amount = vault.withdraw(epochId, assets, address(this), address(this));
+        claimedEpochIndex = vault.epochsLength();
+        return amount;
+    }
+
+    function claimPayouts() external override returns (uint256) {
+        uint256 amount = 0;
+        uint256 len = vault.epochsLength();
+        for (uint256 i = claimedEpochIndex; i < len; i++) {
+            amount += _claimPayoutForEpoch(vault.epochs(i));
+        }
         paymentToken.safeTransfer(beneficiary, amount);
         return amount;
     }
