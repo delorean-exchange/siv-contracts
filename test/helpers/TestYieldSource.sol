@@ -2,7 +2,7 @@
 pragma solidity ^0.8.4;
 
 import "./TestToken.sol";
-import "../interfaces/IYieldSource.sol";
+import "../../src/interfaces/IYieldSource.sol";
 
 import "forge-std/console.sol";
 

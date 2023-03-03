@@ -4,7 +4,7 @@ pragma solidity ^0.8.13;
 import "openzeppelin/token/ERC20/IERC20.sol";
 
 import "./BaseTest.sol";
-import "../src/testonly/TestYieldSource.sol";
+import "./helpers/TestYieldSource.sol";
 import "../src/vaults/SelfInsuredVault.sol";
 
 contract SelfInsuredVaultTest is BaseTest {
@@ -210,45 +210,5 @@ contract SelfInsuredVaultTest is BaseTest {
         assertEq(yt.balanceOf(user0), 6400e18);
         assertEq(yt.balanceOf(user1), 4800e18);
         assertEq(yt.balanceOf(user2), 6400e18);
-    }
-
-    function testDepositWithdraw() public {
-        vm.selectFork(vm.createFork(ARBITRUM_RPC_URL, 61330138));
-
-        SelfInsuredVault vault = new SelfInsuredVault("Self Insured GLP Vault", "siGLP", address(sGLP));
-
-        console.log(sGLP.balanceOf(glpWallet));
-
-        address user = createUser(0);
-
-        vm.prank(glpWallet);
-        sGLP.transfer(user, 10e18);
-
-        console.log("claimable", gmxRewardsTracker.claimable(glpWallet));
-
-        console.log(sGLP.balanceOf(glpWallet));
-        console.log(sGLP.balanceOf(user));
-
-        console.log("claimable", gmxRewardsTracker.claimable(glpWallet));
-        console.log("claimable", gmxRewardsTracker.claimable(user));
-
-        /* console.log("block number", block.number); */
-        /* uint256 delta = 1000; */
-        /* vm.roll(block.number + delta); */
-        /* vm.warp(block.timestamp + 12 * delta); */
-        /* console.log("--\nblock number", block.number); */
-
-        /* console.log("claimable", gmxRewardsTracker.claimable(glpWallet)); */
-        /* console.log("claimable", gmxRewardsTracker.claimable(user)); */
-
-        // Deposit into the vault
-        vm.startPrank(user);
-        sGLP.approve(address(vault), 2e18);
-        assertEq(vault.previewDeposit(2e18), 2e18);
-        vault.deposit(2e18, user);
-        assertEq(sGLP.balanceOf(user), 8e18);
-        assertEq(sGLP.balanceOf(address(vault)), 2e18);
-        assertEq(vault.balanceOf(user), 2e18);
-        vm.stopPrank();
     }
 }

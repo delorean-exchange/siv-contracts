@@ -3,8 +3,8 @@ pragma solidity ^0.8.13;
 
 import "./BaseTest.sol";
 
-import "../src/testonly/TestToken.sol";
-import "../src/testonly/TestYieldSource.sol";
+import "./helpers/TestToken.sol";
+import "./helpers/TestYieldSource.sol";
 
 contract TestYieldSourceTest is BaseTest {
     function testYieldSource() public {
