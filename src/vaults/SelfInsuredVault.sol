@@ -1,29 +1,44 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import "openzeppelin/token/ERC20/ERC20.sol";
-import "openzeppelin/token/ERC20/IERC20.sol";
-import "openzeppelin/token/ERC20/utils/SafeERC20.sol";
-
-import "../interfaces/IYieldSource.sol";
-import "../interfaces/ISelfInsuredVault.sol";
-
 import "forge-std/console.sol";
+
+import { ERC20 } from  "openzeppelin/token/ERC20/ERC20.sol";
+import { IERC20 } from "openzeppelin/token/ERC20/IERC20.sol";
+import { SafeERC20 } from "openzeppelin/token/ERC20/utils/SafeERC20.sol";
+
+import { IYieldSource } from "../interfaces/IYieldSource.sol";
+import { ISelfInsuredVault } from "../interfaces/ISelfInsuredVault.sol";
+import { IInsuranceProvider } from "../interfaces/IInsuranceProvider.sol";
 
 contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
     using SafeERC20 for IERC20;
 
+    struct EpochInfo {
+        uint256 epochId;      // Timestamp of epoch start
+        uint256 totalShares;  // Total shares during this epoch
+        uint256 payout;       // Payout of this epoch, if any
+    }
+    mapping(address => EpochInfo[]) public providerEpochs;
+
+    struct UserEpochInfo {
+        uint256 shares;   // Number of shares for the user
+        uint256 claimed;  // Amount paid out to the user
+    }
     struct UserInfo {
+        // Yield from underlying
         uint256 accumulatedYieldPerToken;
         uint256 accumulatedYield;
     }
     mapping(address => UserInfo) public userInfos;
+    // Epoch accounting, epoch id => info
+    mapping(address => mapping(uint256 => UserEpochInfo)) public userEpochs;
 
     uint256 public constant PRECISION_FACTOR = 10**18;
 
     address public admin;
-    address[] public insurances;
-    uint256[] public ratios;
+    IInsuranceProvider[] public providers;
+    uint256[] public weights;
     address[] public rewardTokens;
 
     IYieldSource public immutable yieldSource;
@@ -39,12 +54,20 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
         _;
     }
 
-    constructor(string memory name_,
-                string memory symbol_,
-                address yieldSource_) ERC20(name_, symbol_) {
+    constructor(string memory name_, string memory symbol_, address yieldSource_) ERC20(name_, symbol_) {
+        admin = msg.sender;
+
         yieldSource = IYieldSource(yieldSource_);
         rewardTokens = new address[](1);
         rewardTokens[0] = IYieldSource(yieldSource_).yieldToken();
+    }
+
+    function providersLength() public view returns (uint256) {
+        return providers.length;
+    }
+
+    function epochsLength(address provider) public view returns (uint256) {
+        return providerEpochs[provider].length;
     }
 
     // -- ERC4642: Asset -- //
@@ -123,11 +146,33 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
         userInfos[user].accumulatedYieldPerToken = yieldPerTokenStored;
     }
 
+    function _updateUserEpochInfo(int256 deltaShares, address user) internal {
+        for (uint256 i = 0; i < providers.length; i++) {
+            // Update for the user
+            uint256 nextEpochId = providers[i].nextEpoch();
+            UserEpochInfo storage info = userEpochs[user][nextEpochId];
+            info.shares = deltaShares > 0
+                ? info.shares + uint256(deltaShares)
+                : info.shares - uint256(-deltaShares);
+
+            // Update for everyone
+            EpochInfo[] storage epochs = providerEpochs[address(providers[i])];
+            if (epochs.length == 0 || epochs[epochs.length - 1].epochId != nextEpochId) {
+                epochs.push(EpochInfo(nextEpochId, 0, 0));
+            }
+            EpochInfo storage epochInfo = epochs[epochs.length - 1];
+            epochInfo.totalShares = deltaShares > 0
+                ? epochInfo.totalShares + uint256(deltaShares)
+                : epochInfo.totalShares - uint256(-deltaShares);
+        }
+    }
+
     function deposit(uint256 assets, address receiver) external returns (uint256 shares) {
         require(assets <= this.maxDeposit(receiver), "SIV: max deposit");
         require(assets >= PRECISION_FACTOR, "SIV: min deposit");
 
         _updateYield(receiver);
+        _updateUserEpochInfo(int256(assets), receiver);
 
         IERC20(_asset()).safeTransferFrom(msg.sender, address(this), assets);
         shares = assets;
@@ -207,6 +252,10 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
     function setAdmin(address) external onlyAdmin {
     }
 
-    function setInsurances(address[] calldata, uint256[] calldata) external onlyAdmin {
+    function setInsuranceProviders(IInsuranceProvider[] calldata providers_, uint256[] calldata weights_) external onlyAdmin {
+        // TODO: changing this mid-epoch will cause problems; fix
+        // TODO: only allow adding new providers?
+        providers = providers_;
+        weights = weights_;
     }
 }

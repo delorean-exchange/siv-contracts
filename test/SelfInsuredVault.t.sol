@@ -1,24 +1,35 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
+import "forge-std/console.sol";
+
 import "openzeppelin/token/ERC20/IERC20.sol";
 
-import "./BaseTest.sol";
-import "./helpers/FakeYieldSource.sol";
-import "../src/vaults/SelfInsuredVault.sol";
+import { ControllerHelper } from "y2k-earthquake/test/ControllerHelper.sol";
+import { Vault } from "y2k-earthquake/src/Vault.sol";
 
-contract SelfInsuredVaultTest is BaseTest {
+import { BaseTest } from "./BaseTest.sol";
+import { FakeYieldSource } from "./helpers/FakeYieldSource.sol";
+
+import { IRewardTracker } from "../src/interfaces/gmx/IRewardTracker.sol";
+import { IInsuranceProvider } from "../src/interfaces/IInsuranceProvider.sol";
+import { SelfInsuredVault } from "../src/vaults/SelfInsuredVault.sol";
+import { Y2KEarthquakeV1InsuranceProvider } from "../src/providers/Y2KEarthquakeV1InsuranceProvider.sol";
+
+contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
     address glpWallet = 0x3aaF2aCA2a0A6b6ec227Bbc2bF5cEE86c2dC599d;
 
     IRewardTracker public gmxRewardsTracker = IRewardTracker(0x4e971a87900b931fF39d1Aad67697F49835400b6);
 
     function testYieldAccounting() public {
+        vm.selectFork(vm.createFork(ARBITRUM_RPC_URL));
+
         FakeYieldSource source = new FakeYieldSource(200);
         IERC20 gt = IERC20(source.generatorToken());
         IERC20 yt = IERC20(source.yieldToken());
-        SelfInsuredVault vault = new SelfInsuredVault("Self Insured YS:G Vault", "siYS:G", address(source));
-
-        console.log("Vault:", address(vault));
+        SelfInsuredVault vault = new SelfInsuredVault("Self Insured YS:G Vault",
+                                                      "siYS:G",
+                                                      address(source));
 
         uint256 before;
         address user0 = createUser(0);
@@ -210,5 +221,53 @@ contract SelfInsuredVaultTest is BaseTest {
         assertEq(yt.balanceOf(user0), 6400e18);
         assertEq(yt.balanceOf(user1), 4800e18);
         assertEq(yt.balanceOf(user2), 6400e18);
+    }
+
+    function testDepegYieldAccounting() public {
+        FakeYieldSource source = new FakeYieldSource(200);
+        IERC20 gt = IERC20(source.generatorToken());
+        IERC20 yt = IERC20(source.yieldToken());
+        SelfInsuredVault vault = new SelfInsuredVault("Self Insured YS:G Vault",
+                                                      "siYS:G",
+                                                      address(source));
+
+        // Set up Y2K insurance vault
+        vm.prank(ADMIN);
+        vaultFactory.createNewMarket(FEE, TOKEN_FRAX, DEPEG_AAA, beginEpoch, endEpoch, ORACLE_FRAX, "y2kFRAX_99*");
+
+        hedge = vaultFactory.getVaults(1)[0];
+        risk = vaultFactory.getVaults(1)[1];
+
+        vHedge = Vault(hedge);
+        vRisk = Vault(risk);
+
+        // Set up the insurance provider
+        Y2KEarthquakeV1InsuranceProvider provider = new Y2KEarthquakeV1InsuranceProvider(address(vHedge));
+
+        // Set the insurance provider at 10% of expected yield
+        IInsuranceProvider[] memory providers = new IInsuranceProvider[](1);
+        providers[0] = IInsuranceProvider(provider);
+        uint256[] memory weights = new uint256[](1);
+        weights[0] = 1000;
+        vault.setInsuranceProviders(providers, weights);
+
+        // Alice deposits into self insured vault
+        source.mintGenerator(ALICE, 10e18);
+
+        vm.startPrank(ALICE);
+        gt.approve(address(vault), 2e18);
+        assertEq(vault.previewDeposit(2e18), 2e18);
+        vault.deposit(2e18, ALICE);
+        (uint256 epoch1, uint256 totalShares1, ) = vault.providerEpochs(address(provider), 0);
+        (uint256 shares1, ) = vault.userEpochs(ALICE, epoch1);
+        assertEq(totalShares1, 2e18);
+        assertEq(shares1, 2e18);
+        gt.approve(address(vault), 1e18);
+        vault.deposit(1e18, ALICE);
+        (, uint256 totalShares2, ) = vault.providerEpochs(address(provider), 0);
+        (uint256 shares2, ) = vault.userEpochs(ALICE, epoch1);
+        assertEq(totalShares2, 3e18);
+        assertEq(shares2, 3e18);
+        vm.stopPrank();
     }
 }

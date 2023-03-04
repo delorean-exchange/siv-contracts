@@ -80,16 +80,10 @@ contract FakeYieldSource is IYieldSource {
     }
 
     function amountPending(address who) public virtual view returns (uint256) {
-        console.log("Get amount pending for", who);
-
         uint256 start = lastHarvestBlockNumber[who] == 0
             ? startBlockNumber
             : lastHarvestBlockNumber[who];
         uint256 deltaBlocks = block.number - start;
-
-        console.log("deltaBlocks", deltaBlocks);
-        console.log("yieldPerBlock", yieldPerBlock);
-
         uint256 total = FakeToken(generatorToken).balanceOf(who) * deltaBlocks * yieldPerBlock;
         return total + pending[who];
     }

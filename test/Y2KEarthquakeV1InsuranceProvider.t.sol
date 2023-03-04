@@ -3,12 +3,15 @@ pragma solidity ^0.8.13;
 
 import "forge-std/console.sol";
 
+import { IERC20 } from "openzeppelin/token/ERC20/IERC20.sol";
+import { ERC20 } from "@solmate/tokens/ERC20.sol";
+
 import { Controller } from "y2k-earthquake/src/Controller.sol";
 import { ControllerHelper } from "y2k-earthquake/test/ControllerHelper.sol";
-import "y2k-earthquake/src/Vault.sol";
+import { Vault } from "y2k-earthquake/src/Vault.sol";
 
-import "./BaseTest.sol";
-import "../src/providers/Y2KEarthquakeV1InsuranceProvider.sol";
+import { BaseTest } from "./BaseTest.sol";
+import { Y2KEarthquakeV1InsuranceProvider } from "../src/providers/Y2KEarthquakeV1InsuranceProvider.sol";
 
 contract Y2KEarthquakeV1InsuranceProviderTest is BaseTest, ControllerHelper {
 

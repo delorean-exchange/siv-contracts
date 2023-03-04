@@ -4,10 +4,9 @@ pragma solidity ^0.8.13;
 import "forge-std/Test.sol";
 
 import "openzeppelin/token/ERC20/IERC20.sol";
-/* import "y2k-earthquake/src/interfaces/IVault.sol"; */
 
-import "../src/interfaces/IWrappedETH.sol";
-import "../src/interfaces/gmx/IRewardTracker.sol";
+import { IWrappedETH } from "../src/interfaces/IWrappedETH.sol";
+import { IRewardTracker } from "../src/interfaces/gmx/IRewardTracker.sol";
 
 contract BaseTest is Test {
     string ARBITRUM_RPC_URL = vm.envString("ARBITRUM_RPC_URL");
