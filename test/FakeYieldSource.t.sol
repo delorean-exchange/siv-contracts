@@ -4,13 +4,13 @@ pragma solidity ^0.8.13;
 import "./BaseTest.sol";
 
 import "./helpers/FakeToken.sol";
-import "./helpers/FakeYieldSource.sol";
+import "./helpers/FakeYieldTracker.sol";
 
-contract FakeYieldSourceTest is BaseTest {
+contract FakeYieldTrackerTest is BaseTest {
     function testYieldSource() public {
-        FakeYieldSource source = new FakeYieldSource(200);
+        FakeYieldTracker source = new FakeYieldTracker(200);
 
-        address user0 = createUser(0);
+        address user0 = createTestUser(0);
         assertEq(source.amountPending(user0), 0);
 
         source.mintGenerator(user0, 10);
@@ -24,7 +24,7 @@ contract FakeYieldSourceTest is BaseTest {
         assertEq(source.amountPending(user0), 0);
         assertEq(FakeToken(source.yieldToken()).balanceOf(user0), 2000);
 
-        address user1 = createUser(1);
+        address user1 = createTestUser(1);
         assertEq(source.amountPending(user1), 0);
 
         vm.roll(block.number + 1);
@@ -47,9 +47,9 @@ contract FakeYieldSourceTest is BaseTest {
     }
 
     function testChangingYieldRate() public {
-        FakeYieldSource source = new FakeYieldSource(200);
+        FakeYieldTracker source = new FakeYieldTracker(200);
 
-        address user0 = createUser(0);
+        address user0 = createTestUser(0);
         assertEq(source.amountPending(user0), 0);
 
         source.mintGenerator(user0, 10);
@@ -67,7 +67,7 @@ contract FakeYieldSourceTest is BaseTest {
         vm.roll(block.number + 1);
         assertEq(source.amountPending(user0), 5000);
 
-        address user1 = createUser(1);
+        address user1 = createTestUser(1);
         source.mintGenerator(user1, 30);
         assertEq(source.amountPending(user1), 0);
 

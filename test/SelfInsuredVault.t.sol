@@ -9,7 +9,8 @@ import { ControllerHelper } from "y2k-earthquake/test/ControllerHelper.sol";
 import { Vault } from "y2k-earthquake/src/Vault.sol";
 
 import { BaseTest } from "./BaseTest.sol";
-import { FakeYieldSource } from "./helpers/FakeYieldSource.sol";
+import { BaseTest as DLXBaseTest } from "dlx/test/BaseTest.sol";
+import { FakeYieldTracker } from "./helpers/FakeYieldTracker.sol";
 
 import { IWrappedETH } from "../src/interfaces/IWrappedETH.sol";
 import { IRewardTracker } from "../src/interfaces/gmx/IRewardTracker.sol";
@@ -17,7 +18,7 @@ import { IInsuranceProvider } from "../src/interfaces/IInsuranceProvider.sol";
 import { SelfInsuredVault } from "../src/vaults/SelfInsuredVault.sol";
 import { Y2KEarthquakeV1InsuranceProvider } from "../src/providers/Y2KEarthquakeV1InsuranceProvider.sol";
 
-contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
+contract SelfInsuredVaultTest is BaseTest, DLXBaseTest, ControllerHelper {
     address glpWallet = 0x3aaF2aCA2a0A6b6ec227Bbc2bF5cEE86c2dC599d;
 
     IRewardTracker public gmxRewardsTracker = IRewardTracker(0x4e971a87900b931fF39d1Aad67697F49835400b6);
@@ -25,7 +26,7 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
     function testYieldAccounting() public {
         vm.selectFork(vm.createFork(ARBITRUM_RPC_URL));
 
-        FakeYieldSource source = new FakeYieldSource(200);
+        FakeYieldTracker source = new FakeYieldTracker(200);
         IERC20 gt = IERC20(source.generatorToken());
         IERC20 yt = IERC20(source.yieldToken());
         SelfInsuredVault vault = new SelfInsuredVault("Self Insured YS:G Vault",
@@ -33,7 +34,7 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
                                                       address(source));
 
         uint256 before;
-        address user0 = createUser(0);
+        address user0 = createTestUser(0);
         source.mintGenerator(user0, 10e18);
 
         vm.startPrank(user0);
@@ -107,7 +108,7 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         assertEq(yt.balanceOf(user0), 3800e18);
 
         // Add a second user
-        address user1 = createUser(1);
+        address user1 = createTestUser(1);
         source.mintGenerator(user1, 20e18);
         assertEq(vault.calculatePendingYield(user0), 0);
         assertEq(vault.calculatePendingYield(user1), 0);
@@ -154,7 +155,7 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         assertEq(yt.balanceOf(user1), 1600e18);
 
         // Third user deposits, advance some blocks, change yield rate, users claim on different blocks
-        address user2 = createUser(2);
+        address user2 = createTestUser(2);
         source.mintGenerator(user2, 20e18);
         vm.startPrank(user2);
         gt.approve(address(vault), 8e18);
@@ -224,13 +225,56 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         assertEq(yt.balanceOf(user2), 6400e18);
     }
 
+    function testPurchaseWithDLXFutureYield() public {
+        depositDepeg();
+
+        // TODO: Consolidate this setup code? it is duped in `testDepegYieldAccounting`
+        FakeYieldTracker source = new FakeYieldTracker(200);
+        IERC20 gt = IERC20(source.generatorToken());
+        IERC20 yt = IERC20(source.yieldToken());
+        vm.prank(ADMIN);
+        SelfInsuredVault vault = new SelfInsuredVault("Self Insured YS:G Vault",
+                                                      "siYS:G",
+                                                      address(source));
+
+        // Set up Y2K insurance vault
+        vm.prank(ADMIN);
+        vaultFactory.createNewMarket(FEE, TOKEN_FRAX, DEPEG_AAA, beginEpoch, endEpoch, ORACLE_FRAX, "y2kFRAX_99*");
+
+        hedge = vaultFactory.getVaults(1)[0];
+        risk = vaultFactory.getVaults(1)[1];
+
+        vHedge = Vault(hedge);
+        vRisk = Vault(risk);
+
+        // Set up the insurance provider
+        Y2KEarthquakeV1InsuranceProvider provider = new Y2KEarthquakeV1InsuranceProvider(address(vHedge));
+
+        // Set the insurance provider at 10% of expected yield
+        IInsuranceProvider[] memory providers = new IInsuranceProvider[](1);
+        providers[0] = IInsuranceProvider(provider);
+        uint256[] memory weights = new uint256[](1);
+        weights[0] = 10_00;
+
+        // Set up Delorean market
+
+        vm.prank(ADMIN);
+        vault.setInsuranceProviders(providers, weights);
+
+        source.mintGenerator(ALICE, 10e18);
+
+        vm.startPrank(ALICE);
+        gt.approve(address(vault), 2e18);
+        assertEq(vault.previewDeposit(2e18), 2e18);
+        vault.deposit(2e18, ALICE);
+    }
+
     function testDepegYieldAccounting() public {
         depositDepeg();
 
-        FakeYieldSource source = new FakeYieldSource(200);
+        FakeYieldTracker source = new FakeYieldTracker(200);
         IERC20 gt = IERC20(source.generatorToken());
         IERC20 yt = IERC20(source.yieldToken());
-
         vm.prank(ADMIN);
         SelfInsuredVault vault = new SelfInsuredVault("Self Insured YS:G Vault",
                                                       "siYS:G",

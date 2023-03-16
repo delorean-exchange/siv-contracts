@@ -70,7 +70,7 @@ contract Y2KEarthquakeV1InsuranceProviderTest is BaseTest, ControllerHelper {
         vHedge = Vault(hedge);
         vRisk = Vault(risk);
 
-        address user0 = createUser(0);
+        address user0 = createTestUser(0);
         vm.startPrank(user0);
 
         provider = new Y2KEarthquakeV1InsuranceProvider(address(vHedge));
@@ -156,7 +156,7 @@ contract Y2KEarthquakeV1InsuranceProviderTest is BaseTest, ControllerHelper {
         vHedge = Vault(hedge);
         vRisk = Vault(risk);
 
-        address user0 = createUser(0);
+        address user0 = createTestUser(0);
         vm.startPrank(user0);
 
         provider = new Y2KEarthquakeV1InsuranceProvider(address(vHedge));

@@ -15,7 +15,7 @@ contract BaseTest is Test {
     IERC20 weth = IERC20(0x82aF49447D8a07e3bd95BD0d56f35241523fBab1);
     IERC20 sGLP = IERC20(0x5402B5F40310bDED796c7D0F3FF6683f5C0cFfdf);
 
-    function createUser(uint32 i) public returns (address) {
+    function createTestUser(uint32 i) public returns (address) {
         string memory mnemonic = "test test test test test test test test test test test junk";
         uint256 privateKey = vm.deriveKey(mnemonic, i);
         address user = vm.addr(privateKey);
