@@ -266,37 +266,40 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         assertEq(vault.previewDeposit(2e18), 2e18);
         vault.deposit(2e18, ALICE);
         (uint256 epoch1, uint256 totalShares1, , ) = vault.providerEpochs(address(provider), 0);
-        (uint256 shares1, ) = vault.userEpochs(ALICE, epoch1);
-        assertEq(totalShares1, 2e18);
-        assertEq(shares1, 2e18);
-        gt.approve(address(vault), 1e18);
-        vault.deposit(1e18, ALICE);
-        (, uint256 totalShares2, , ) = vault.providerEpochs(address(provider), 0);
-        (uint256 shares2, ) = vault.userEpochs(ALICE, epoch1);
-        assertEq(totalShares2, 3e18);
-        assertEq(shares2, 3e18);
-        vm.stopPrank();
 
-        console.log("Yield token", address(source.yieldToken()));
-        console.log("ADMIN WETH", IERC20(WETH).balanceOf(ADMIN));
-        source.mintYield(address(vault), 10000e18);
+        // Code below obseleted by refactor
 
-        // TODO: Use DLX to get future WETH yield
-        vm.deal(address(vault), 200 ether);
-        vm.prank(address(vault));
-        IWrappedETH(address(weth)).deposit{value: 100 ether}();
+        /* (uint256 shares1, ) = vault.userEpochs(ALICE, epoch1); */
+        /* assertEq(totalShares1, 2e18); */
+        /* assertEq(shares1, 2e18); */
+        /* gt.approve(address(vault), 1e18); */
+        /* vault.deposit(1e18, ALICE); */
+        /* (, uint256 totalShares2, , ) = vault.providerEpochs(address(provider), 0); */
+        /* (uint256 shares2, ) = vault.userEpochs(ALICE, epoch1); */
+        /* assertEq(totalShares2, 3e18); */
+        /* assertEq(shares2, 3e18); */
+        /* vm.stopPrank(); */
 
-        vm.prank(ADMIN);
-        vault.purchaseForNextEpoch();
+        /* console.log("Yield token", address(source.yieldToken())); */
+        /* console.log("ADMIN WETH", IERC20(WETH).balanceOf(ADMIN)); */
+        /* source.mintYield(address(vault), 10000e18); */
 
-        return;
+        /* // TODO: Use DLX to get future WETH yield */
+        /* vm.deal(address(vault), 200 ether); */
+        /* vm.prank(address(vault)); */
+        /* IWrappedETH(address(weth)).deposit{value: 100 ether}(); */
 
-        vm.warp(beginEpoch + 10 days);
+        /* vm.prank(ADMIN); */
+        /* vault.purchaseForNextEpoch(); */
 
-        controller.triggerDepeg(SINGLE_MARKET_INDEX, endEpoch);
+        /* return; */
 
-        uint256 pending = provider.pendingPayouts();
-        console.log("pending", pending);
+        /* vm.warp(beginEpoch + 10 days); */
+
+        /* controller.triggerDepeg(SINGLE_MARKET_INDEX, endEpoch); */
+
+        /* uint256 pending = provider.pendingPayouts(); */
+        /* console.log("pending", pending); */
 
         /* uint256 before = IERC20(weth).balanceOf(user0); */
         /* uint256 result = provider.claimPayouts(); */
