@@ -7,7 +7,8 @@ import { ERC20 } from  "openzeppelin/token/ERC20/ERC20.sol";
 import { IERC20 } from "openzeppelin/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "openzeppelin/token/ERC20/utils/SafeERC20.sol";
 
-import { IYieldSource } from "../interfaces/IYieldSource.sol";
+/* import { IYieldTracker } from "../interfaces/IYieldTracker.sol"; */
+import { IYieldSource } from "dlx/src//interfaces/IYieldSource.sol";
 import { ISelfInsuredVault } from "../interfaces/ISelfInsuredVault.sol";
 import { IInsuranceProvider } from "../interfaces/IInsuranceProvider.sol";
 
@@ -66,7 +67,7 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
 
         yieldSource = IYieldSource(yieldSource_);
         rewardTokens = new address[](1);
-        rewardTokens[0] = IYieldSource(yieldSource_).yieldToken();
+        rewardTokens[0] = address(IYieldSource(yieldSource_).yieldToken());
     }
 
     function providersLength() public view returns (uint256) {
@@ -79,7 +80,7 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
 
     // -- ERC4642: Asset -- //
     function _asset() private view returns (address) {
-        return yieldSource.generatorToken();
+        return address(yieldSource.generatorToken());
     }
 
     function asset() external view returns (address) {
@@ -109,7 +110,7 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
     }
 
     function _harvest() internal {
-        uint256 pending = yieldSource.amountPending(address(this));
+        uint256 pending = yieldSource.amountPending();
         yieldSource.harvest();
         harvestedYield += pending;
     }
@@ -119,7 +120,7 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
     }
 
     function _cumulativeYield() private view returns (uint256) {
-        uint256 ap = yieldSource.amountPending(address(this));
+        uint256 ap = yieldSource.amountPending();
         return harvestedYield + ap;
     }
 
@@ -221,6 +222,8 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
     }
 
     function _updateUserEpochTracker(address user, int256 deltaShares) internal {
+        if (providers.length == 0) return;
+
         UserEpochTracker storage tracker = userEpochTrackers[user];
         // NOTE: assuming synchronized epoch ID's
         uint256 nextEpochId = providers[0].nextEpoch();
@@ -246,11 +249,17 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
         require(assets <= this.maxDeposit(receiver), "SIV: max deposit");
         require(assets >= PRECISION_FACTOR, "SIV: min deposit");
 
+        console.log("_updateYield");
         _updateYield(receiver);
+        console.log("_updateProviderEpochs");
         _updateProviderEpochs(int256(assets));
+        console.log("_updateUserEpochTracker");
         _updateUserEpochTracker(receiver, int256(assets));
 
         IERC20(_asset()).safeTransferFrom(msg.sender, address(this), assets);
+        IERC20(_asset()).safeApprove(address(yieldSource), assets);
+        console.log("Depositing into yieldSource", assets);
+        yieldSource.deposit(assets, false);
         shares = assets;
         _mint(receiver, shares);
     }
@@ -311,7 +320,7 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
         uint256[] memory owed = _previewClaimRewards(msg.sender);
 
         require(owed.length == rewardTokens.length, "SIV: claim1");
-        require(rewardTokens[0] == yieldSource.yieldToken(), "SIV: claim2");
+        require(rewardTokens[0] == address(yieldSource.yieldToken()), "SIV: claim2");
 
         _updateYield(msg.sender);
         require(owed[0] == userInfos[msg.sender].accumulatedYield, "SIV: claim3");
