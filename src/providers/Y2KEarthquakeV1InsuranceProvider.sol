@@ -63,6 +63,15 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
         return epochId;
     }
 
+    function followingEpoch(uint256 epochId) external view returns (uint256) {
+        for (uint256 i = 1; i < vault.epochsLength(); i++) {
+            if (vault.epochs(i - 1) == epochId) {
+                return vault.epochs(i);
+            }
+        }
+        return 0;
+    }
+
     function nextEpoch() external override view returns (uint256) {
         return _nextEpoch();
     }
@@ -71,9 +80,6 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
         // TODO: Confirm with Y2K team that epochs will be 1 week long
         uint256 id = _nextEpoch();
         uint256 beginTS = vault.idEpochBegin(id);
-        console.log("id, beginTS", id, beginTS);
-        console.log("diff", id - beginTS);
-
         return 7 * 24 * 3600;
     }
 

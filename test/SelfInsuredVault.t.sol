@@ -265,7 +265,89 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         gt.approve(address(vault), 2e18);
         assertEq(vault.previewDeposit(2e18), 2e18);
         vault.deposit(2e18, ALICE);
-        (uint256 epoch1, uint256 totalShares1, , ) = vault.providerEpochs(address(provider), 0);
+        {
+            (uint256 epochId, uint256 totalShares, , ) = vault.providerEpochs(address(provider), 0);
+            assertEq(totalShares, 2e18);
+
+            (uint256 startEpochId,
+             uint256 shares,
+             uint256 nextEpochId,
+             uint256 nextShares,
+             uint256 accumulatdPayouts) = vault.userEpochTrackers(ALICE);
+            assertEq(startEpochId, 0);
+            assertEq(shares, 0);
+            assertEq(nextEpochId, epochId);
+            assertEq(nextShares, 2e18);
+            assertEq(accumulatdPayouts, 0);
+        }
+
+        gt.approve(address(vault), 1e18);
+        vault.deposit(1e18, ALICE);
+        {
+            (uint256 epochId, uint256 totalShares, , ) = vault.providerEpochs(address(provider), 0);
+            assertEq(totalShares, 3e18);
+
+            (uint256 startEpochId,
+             uint256 shares,
+             uint256 nextEpochId,
+             uint256 nextShares,
+             uint256 accumulatdPayouts) = vault.userEpochTrackers(ALICE);
+            assertEq(startEpochId, 0);
+            assertEq(shares, 0);
+            assertEq(nextEpochId, epochId);
+            assertEq(nextShares, 3e18);
+            assertEq(accumulatdPayouts, 0);
+        }
+        vm.stopPrank();
+
+        // Move ahead to next epoch, end it
+        vm.warp(beginEpoch + 10 days);
+        vm.startPrank(vHedge.controller());
+        vHedge.endEpoch(provider.currentEpoch());
+        vm.stopPrank();
+
+        // Create two more epochs
+        vm.startPrank(vHedge.factory());
+        vHedge.createAssets(endEpoch, endEpoch + 1 days, 5);
+        vm.stopPrank();
+
+        vm.startPrank(vHedge.factory());
+        vHedge.createAssets(endEpoch + 1 days, endEpoch + 2 days, 5);
+        vm.stopPrank();
+
+        // Move into the first epoch, with one more created epoch available after it
+        vm.warp(endEpoch + 10 minutes);
+        vm.startPrank(vHedge.controller());
+        vm.stopPrank();
+
+        // Alice deposits more shares
+        vm.startPrank(ALICE);
+        gt.approve(address(vault), 3e18);
+        vault.deposit(3e18, ALICE);
+        vm.stopPrank();
+
+        vault.pprintEpochs();
+
+        {
+            (uint256 epochId0, uint256 totalShares0, , ) = vault.providerEpochs(address(provider), 0);
+            assertEq(totalShares0, 3e18);
+            (uint256 epochId1, uint256 totalShares1, , ) = vault.providerEpochs(address(provider), 1);
+            assertEq(totalShares1, 3e18);
+            (uint256 epochId2, uint256 totalShares2, , ) = vault.providerEpochs(address(provider), 2);
+            assertEq(totalShares2, 6e18);
+
+            (uint256 startEpochId,
+             uint256 shares,
+             uint256 nextEpochId,
+             uint256 nextShares,
+             uint256 accumulatdPayouts) = vault.userEpochTrackers(ALICE);
+
+            assertEq(startEpochId, epochId0);
+            assertEq(nextEpochId, epochId2);
+            assertEq(shares, 3e18);
+            assertEq(nextShares, 6e18);
+            assertEq(accumulatdPayouts, 0);
+        }
 
         // Code below obseleted by refactor
 

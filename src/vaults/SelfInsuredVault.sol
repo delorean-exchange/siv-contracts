@@ -18,10 +18,8 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
     struct UserEpochTracker {
         uint256 startEpochId;
         uint256 shares;
-
         uint256 nextEpochId;
         uint256 nextShares;
-
         uint256 accumulatdPayouts;
     }
     // User address -> tracker
@@ -166,9 +164,8 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
             uint256 currentEpochId = provider.currentEpoch();
             EpochInfo[] storage infos = providerEpochs[address(provider)];
             // TODO: Use nextId field + mapping instead of list
-            EpochInfo storage info;
             for (uint256 j = 0; j < infos.length; j++) {
-                info = infos[j];
+                EpochInfo storage info = infos[j];
                 if (info.epochId < tracker.startEpochId) continue;
                 if (info.epochId >= tracker.nextEpochId) break;
                 if (info.epochId == currentEpochId) break;
@@ -178,6 +175,48 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
                 // the last iteration of the loop
                 tracker.startEpochId = info.epochId;
             }
+        }
+    }
+
+    function pprintEpochs() external {
+        for (uint256 i = 0; i < providers.length; i++) {
+            IInsuranceProvider provider = providers[i];
+            EpochInfo[] storage epochs = providerEpochs[address(provider)];
+            for (uint256 j = 0; j < epochs.length; j++) {
+                console.log("----");
+                console.log("Epoch", j);
+                console.log("- epochId    ", epochs[j].epochId);
+                console.log("- totalShares", epochs[j].totalShares);
+                console.log("- payout     ", epochs[j].payout);
+                console.log("- premiumPaid", epochs[j].premiumPaid);
+            }
+        }
+        console.log("----");
+    }
+
+    function _updateProviderEpochs(int256 deltaShares) internal {
+        for (uint256 i = 0; i < providers.length; i++) {
+            IInsuranceProvider provider = providers[i];
+            EpochInfo[] storage epochs = providerEpochs[address(provider)];
+
+            // Create first EpochInfo, if needed
+            if (epochs.length == 0) {
+                epochs.push(EpochInfo(provider.nextEpoch(), 0, 0, 0)); 
+            }
+            EpochInfo storage epochInfo = epochs[epochs.length - 1];
+            uint256 totalShares = epochInfo.totalShares;
+
+            // Add new EpochInfo's, if needed
+            uint256 id = provider.followingEpoch(epochInfo.epochId);
+            while (id != 0) {
+                epochs.push(EpochInfo(id, totalShares, 0, 0));
+                epochInfo = epochs[epochs.length - 1];
+                id = provider.followingEpoch(id);
+            }
+
+            epochInfo.totalShares = deltaShares > 0
+                ? epochInfo.totalShares + uint256(deltaShares)
+                : epochInfo.totalShares - uint256(-deltaShares);
         }
     }
 
@@ -198,8 +237,8 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
         }
 
         tracker.nextShares = deltaShares > 0
-            ? tracker.shares + uint256(deltaShares)
-            : tracker.shares - uint256(-deltaShares);
+            ? tracker.nextShares + uint256(deltaShares)
+            : tracker.nextShares - uint256(-deltaShares);
     }
 
     function deposit(uint256 assets, address receiver) external returns (uint256 shares) {
@@ -207,6 +246,7 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
         require(assets >= PRECISION_FACTOR, "SIV: min deposit");
 
         _updateYield(receiver);
+        _updateProviderEpochs(int256(assets));
         _updateUserEpochTracker(receiver, int256(assets));
 
         IERC20(_asset()).safeTransferFrom(msg.sender, address(this), assets);
@@ -322,9 +362,6 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
 
         uint256 weight = weights[i];
         uint256 amount = (weight * projectedYield) / 100_00;
-        console.log("Purchase", amount);
-        console.log("paymentToken", address(provider.paymentToken()));
-        console.log("paymentToken balance", provider.paymentToken().balanceOf(address(this)));
 
         IERC20(provider.paymentToken()).approve(address(provider), amount);
         provider.purchaseForNextEpoch(amount);
@@ -333,8 +370,6 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
 
     function purchaseForNextEpoch() external onlyAdmin {
         uint256 projectedYield = _projectEpochYield();
-        console.log("projectedYield", projectedYield);
-
         for (uint256 i = 0; i < providers.length; i++) {
             _purchaseForNextEpoch(i, projectedYield);
         }
