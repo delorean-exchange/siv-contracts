@@ -15,6 +15,7 @@ interface IInsuranceProvider {
     function currentEpoch() external view returns (uint256);
     function nextEpoch() external view returns (uint256);
     function isNextEpochPurchasable() external view returns (bool);
+    function epochDuration() external view returns (uint256);
 
     function nextEpochPurchased() external returns (uint256);
     function currentEpochPurchased() external returns (uint256);

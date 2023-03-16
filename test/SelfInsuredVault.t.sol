@@ -11,6 +11,7 @@ import { Vault } from "y2k-earthquake/src/Vault.sol";
 import { BaseTest } from "./BaseTest.sol";
 import { FakeYieldSource } from "./helpers/FakeYieldSource.sol";
 
+import { IWrappedETH } from "../src/interfaces/IWrappedETH.sol";
 import { IRewardTracker } from "../src/interfaces/gmx/IRewardTracker.sol";
 import { IInsuranceProvider } from "../src/interfaces/IInsuranceProvider.sol";
 import { SelfInsuredVault } from "../src/vaults/SelfInsuredVault.sol";
@@ -54,13 +55,13 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         assertEq(yt.balanceOf(user0), 0);
 
         vm.prank(user0);
-        vault.claim();
+        vault.claimRewards();
 
         assertEq(yt.balanceOf(address(vault)), 0);
         assertEq(yt.balanceOf(user0), 400e18);
 
         vm.prank(user0);
-        vault.claim();
+        vault.claimRewards();
         assertEq(yt.balanceOf(address(vault)), 0);
         assertEq(yt.balanceOf(user0), 400e18);
 
@@ -77,7 +78,7 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         assertEq(yt.balanceOf(user0), 400e18);
 
         vm.prank(user0);
-        vault.claim();
+        vault.claimRewards();
         assertEq(yt.balanceOf(address(vault)), 0);
         assertEq(yt.balanceOf(user0), 2400e18);
 
@@ -99,7 +100,7 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         assertEq(vault.calculatePendingYield(user0), 1400e18);
 
         vm.prank(user0);
-        vault.claim();
+        vault.claimRewards();
         assertEq(vault.cumulativeYield(), 3800e18);
         assertEq(vault.calculatePendingYield(user0), 0);
         assertEq(yt.balanceOf(address(vault)), 0);
@@ -143,12 +144,12 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         assertEq(vault.calculatePendingYield(user1), 1600e18);
 
         vm.prank(user0);
-        vault.claim();
+        vault.claimRewards();
         assertEq(vault.calculatePendingYield(user0), 0);
         assertEq(yt.balanceOf(user0), 4800e18);
 
         vm.prank(user1);
-        vault.claim();
+        vault.claimRewards();
         assertEq(vault.calculatePendingYield(user1), 0);
         assertEq(yt.balanceOf(user1), 1600e18);
 
@@ -189,7 +190,7 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         assertEq(vault.calculatePendingYield(user2), 4000e18);
 
         vm.prank(user1);
-        vault.claim();
+        vault.claimRewards();
         assertEq(vault.calculatePendingYield(user0), 1000e18);
         assertEq(vault.calculatePendingYield(user1), 0);
         assertEq(vault.calculatePendingYield(user2), 4000e18);
@@ -203,7 +204,7 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         assertEq(vault.calculatePendingYield(user2), 6400e18);
 
         vm.prank(user2);
-        vault.claim();
+        vault.claimRewards();
         assertEq(vault.calculatePendingYield(user0), 1600e18);
         assertEq(vault.calculatePendingYield(user1), 1200e18);
         assertEq(vault.calculatePendingYield(user2), 0);
@@ -212,9 +213,9 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         assertEq(yt.balanceOf(user2), 6400e18);
 
         vm.prank(user0);
-        vault.claim();
+        vault.claimRewards();
         vm.prank(user1);
-        vault.claim();
+        vault.claimRewards();
         assertEq(vault.calculatePendingYield(user0), 0);
         assertEq(vault.calculatePendingYield(user1), 0);
         assertEq(vault.calculatePendingYield(user2), 0);
@@ -224,9 +225,13 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
     }
 
     function testDepegYieldAccounting() public {
+        depositDepeg();
+
         FakeYieldSource source = new FakeYieldSource(200);
         IERC20 gt = IERC20(source.generatorToken());
         IERC20 yt = IERC20(source.yieldToken());
+
+        vm.prank(ADMIN);
         SelfInsuredVault vault = new SelfInsuredVault("Self Insured YS:G Vault",
                                                       "siYS:G",
                                                       address(source));
@@ -248,7 +253,9 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         IInsuranceProvider[] memory providers = new IInsuranceProvider[](1);
         providers[0] = IInsuranceProvider(provider);
         uint256[] memory weights = new uint256[](1);
-        weights[0] = 1000;
+        weights[0] = 10_00;
+
+        vm.prank(ADMIN);
         vault.setInsuranceProviders(providers, weights);
 
         // Alice deposits into self insured vault
@@ -258,16 +265,41 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         gt.approve(address(vault), 2e18);
         assertEq(vault.previewDeposit(2e18), 2e18);
         vault.deposit(2e18, ALICE);
-        (uint256 epoch1, uint256 totalShares1, ) = vault.providerEpochs(address(provider), 0);
+        (uint256 epoch1, uint256 totalShares1, , ) = vault.providerEpochs(address(provider), 0);
         (uint256 shares1, ) = vault.userEpochs(ALICE, epoch1);
         assertEq(totalShares1, 2e18);
         assertEq(shares1, 2e18);
         gt.approve(address(vault), 1e18);
         vault.deposit(1e18, ALICE);
-        (, uint256 totalShares2, ) = vault.providerEpochs(address(provider), 0);
+        (, uint256 totalShares2, , ) = vault.providerEpochs(address(provider), 0);
         (uint256 shares2, ) = vault.userEpochs(ALICE, epoch1);
         assertEq(totalShares2, 3e18);
         assertEq(shares2, 3e18);
         vm.stopPrank();
+
+        console.log("Yield token", address(source.yieldToken()));
+        console.log("ADMIN WETH", IERC20(WETH).balanceOf(ADMIN));
+        source.mintYield(address(vault), 10000e18);
+
+        // TODO: Use DLX to get future WETH yield
+        vm.deal(address(vault), 200 ether);
+        vm.prank(address(vault));
+        IWrappedETH(address(weth)).deposit{value: 100 ether}();
+
+        vm.prank(ADMIN);
+        vault.purchaseForNextEpoch();
+
+        return;
+
+        vm.warp(beginEpoch + 10 days);
+
+        controller.triggerDepeg(SINGLE_MARKET_INDEX, endEpoch);
+
+        uint256 pending = provider.pendingPayouts();
+        console.log("pending", pending);
+
+        /* uint256 before = IERC20(weth).balanceOf(user0); */
+        /* uint256 result = provider.claimPayouts(); */
+        /* uint256 delta = IERC20(weth).balanceOf(user0) - before; */
     }
 }

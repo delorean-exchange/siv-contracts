@@ -72,6 +72,13 @@ contract FakeYieldSource is IYieldSource {
         holders.push(who);
     }
 
+    function mintYield(address who, uint256 amount) public {
+        require(FakeToken(yieldToken).balanceOf(who) == 0, "TYS: non-zero mint");
+        FakeToken(yieldToken).publicMint(who, amount);
+        lastHarvestBlockNumber[who] = block.number;
+        holders.push(who);
+    }
+
     function harvest() public {
         uint256 amount = this.amountPending(msg.sender);
         FakeToken(yieldToken).publicMint(msg.sender, amount);

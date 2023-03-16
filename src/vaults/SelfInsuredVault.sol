@@ -14,11 +14,30 @@ import { IInsuranceProvider } from "../interfaces/IInsuranceProvider.sol";
 contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
     using SafeERC20 for IERC20;
 
+    // ----
+
+    // NOTE: Epoch ID's are assumed to be synchronized across providers
+    struct UserEpochTracker {
+        uint256 startEpochId;
+        uint256 shares;
+
+        uint256 nextEpochId;
+        uint256 nextShares;
+
+        uint256 accumulatdPayouts;
+    }
+    // user address -> tracker
+    mapping(address => UserEpochTracker) public userEpochTrackers;
+
+    // ----
+
     struct EpochInfo {
         uint256 epochId;      // Timestamp of epoch start
         uint256 totalShares;  // Total shares during this epoch
         uint256 payout;       // Payout of this epoch, if any
+        uint256 premiumPaid;  // If zero, insurance has not yet been purchased
     }
+    // provider address -> epoch info
     mapping(address => EpochInfo[]) public providerEpochs;
 
     struct UserEpochInfo {
@@ -146,7 +165,50 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
         userInfos[user].accumulatedYieldPerToken = yieldPerTokenStored;
     }
 
-    function _updateUserEpochInfo(int256 deltaShares, address user) internal {
+    function _accumulateDepegRewards(address user) {
+        UserEpochTracker storage tracker = userEpochTrackers[user];
+        if (tracker.startEpochId == 0) return;
+        if (tracker.shares == 0) return;
+
+        for (uint256 i = 0; i < providers.length; i++) {
+            IInsuranceProvider storage provider = providers[i];
+            uint256 nextEpochId = provider.nextEpoch();
+            EpochInfo[] storage infos = providerEpochs[address(provider)];
+            // TODO: Use nextId field + mapping instead of list
+            EpochInfo storage info;
+            for (uint256 j = 0; j < infos.length; j++) {
+                info = infos[j];
+                if (info.epochId < tracker.startEpochId) continue;
+                if (info.epochId >= tracker.nextEpochId) break;
+                if (info.epochId == currentEpochId) break;
+                tracker.accumulatdPayouts += (tracker.shares * info.payout) / info.totalShares;
+            }
+            tracker.startEpochId = info.epochId;
+        }
+    }
+
+    function _updateUserEpochTracker(address user, int256 deltaShares) internal {
+        UserEpochTracker storage tracker = userEpochTrackers[user];
+        uint256 nextEpochId = provider.nextEpoch();
+
+        // (1) See if we need to shift nextEpoch into start/end epoch segment
+        if (nextEpochId != tracker.nextEpochId) {
+            _accumulateDepegRewards(user);
+
+            tracker.startEpochId = tracker.nextEpochId;
+            tracker.shares = tracker.nextEpochShares;
+
+            tracker.nextEpochShares = tracker.nextEpochId;
+            tracker.nextShares = deltaShares > 0
+                ? info.shares + uint256(deltaShares)
+                : info.shares - uint256(-deltaShares);
+        }
+
+            // (2) Update nextEpoch
+        }
+    }
+
+    function _updateUserEpochInfo(address user, int256 deltaShares) internal {
         for (uint256 i = 0; i < providers.length; i++) {
             // Update for the user
             uint256 nextEpochId = providers[i].nextEpoch();
@@ -158,7 +220,7 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
             // Update for everyone
             EpochInfo[] storage epochs = providerEpochs[address(providers[i])];
             if (epochs.length == 0 || epochs[epochs.length - 1].epochId != nextEpochId) {
-                epochs.push(EpochInfo(nextEpochId, 0, 0));
+                epochs.push(EpochInfo(nextEpochId, 0, 0, 0));
             }
             EpochInfo storage epochInfo = epochs[epochs.length - 1];
             epochInfo.totalShares = deltaShares > 0
@@ -172,7 +234,8 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
         require(assets >= PRECISION_FACTOR, "SIV: min deposit");
 
         _updateYield(receiver);
-        _updateUserEpochInfo(int256(assets), receiver);
+        _updateUserEpochInfo(receiver, int256(assets));
+        _updateUserEpochTracker(receiver, int256(assets), );
 
         IERC20(_asset()).safeTransferFrom(msg.sender, address(this), assets);
         shares = assets;
@@ -219,20 +282,20 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
     }
 
     // -- Rewards -- //
-    function _previewClaim(address who) internal returns (uint256[] memory result) {
+    function _previewClaimRewards(address who) internal returns (uint256[] memory result) {
         result = new uint256[](1);
         result[0] = _calculatePendingYield(who);
         return result;
     }
 
-    function previewClaim(address who) external returns (uint256[] memory result) {
-        return _previewClaim(who);
+    function previewClaimRewards(address who) external returns (uint256[] memory result) {
+        return _previewClaimRewards(who);
     }
 
-    function claim() external returns (uint256[] memory) {
+    function claimRewards() external returns (uint256[] memory) {
         _harvest();
 
-        uint256[] memory owed = _previewClaim(msg.sender);
+        uint256[] memory owed = _previewClaimRewards(msg.sender);
 
         require(owed.length == rewardTokens.length, "SIV: claim1");
         require(rewardTokens[0] == yieldSource.yieldToken(), "SIV: claim2");
@@ -253,9 +316,55 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
     }
 
     function setInsuranceProviders(IInsuranceProvider[] calldata providers_, uint256[] calldata weights_) external onlyAdmin {
-        // TODO: changing this mid-epoch will cause problems; fix
-        // TODO: only allow adding new providers?
+        // TODO: changing this mid-epoch will cause problems, find a solution.
+        // TODO: possible fix is to only allow adding new providers, and adjusting
+        // the weights of previous ones to 0
         providers = providers_;
         weights = weights_;
+    }
+
+    function _projectEpochYield() internal returns (uint256) {
+        // Assume all providers have same epoch duration
+        IInsuranceProvider provider0 = providers[0];
+        uint256 epochDuration = provider0.epochDuration();
+
+        // TODO: For now, this is hard coding the forward looking yield rate.
+        // We need to add a way to estimate this, either let the admin account
+        // set it, or estimate it based on historical data.
+        uint256 yieldPerUnderlyingPerSecond = (100 * PRECISION_FACTOR) / 10e10;
+
+        return (epochDuration * this.totalSupply() * yieldPerUnderlyingPerSecond) / PRECISION_FACTOR;
+    }
+
+    function _purchaseForNextEpoch(uint256 i, uint256 projectedYield) internal {
+        IInsuranceProvider provider = providers[i];
+        require(provider.isNextEpochPurchasable(), "SIV: not purchasable");
+
+        uint256 nextEpochId = provider.nextEpoch();
+        EpochInfo[] storage epochs = providerEpochs[address(provider)];
+        if (epochs.length == 0 || epochs[epochs.length - 1].epochId != nextEpochId) {
+            epochs.push(EpochInfo(nextEpochId, 0, 0, 0));
+        }
+        EpochInfo storage epochInfo = epochs[epochs.length - 1];
+        require(epochInfo.premiumPaid == 0, "SIV: already purchased");
+
+        uint256 weight = weights[i];
+        uint256 amount = (weight * projectedYield) / 100_00;
+        console.log("Purchase", amount);
+        console.log("paymentToken", address(provider.paymentToken()));
+        console.log("paymentToken balance", provider.paymentToken().balanceOf(address(this)));
+
+        IERC20(provider.paymentToken()).approve(address(provider), amount);
+        provider.purchaseForNextEpoch(amount);
+        epochInfo.premiumPaid = amount;
+    }
+
+    function purchaseForNextEpoch() external onlyAdmin {
+        uint256 projectedYield = _projectEpochYield();
+        console.log("projectedYield", projectedYield);
+
+        for (uint256 i = 0; i < providers.length; i++) {
+            _purchaseForNextEpoch(i, projectedYield);
+        }
     }
 }
