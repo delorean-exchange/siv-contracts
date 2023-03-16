@@ -225,7 +225,7 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
         // NOTE: assuming synchronized epoch ID's
         uint256 nextEpochId = providers[0].nextEpoch();
 
-        // (1) See if we need to shift nextEpoch into start/end epoch segment
+        // See if we need to shift nextEpoch into start/end epoch segment
         if (nextEpochId != tracker.nextEpochId) {
             _accumulateDepegRewards(user);
 
@@ -236,6 +236,7 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
             tracker.nextShares = tracker.shares;
         }
 
+        // Update the shares starting with the next epoch
         tracker.nextShares = deltaShares > 0
             ? tracker.nextShares + uint256(deltaShares)
             : tracker.nextShares - uint256(-deltaShares);
