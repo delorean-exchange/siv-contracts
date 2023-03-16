@@ -9,3 +9,6 @@
 [submodule "lib/Earthquake"]
 	path = lib/Earthquake
 	url = https://github.com/Y2K-Finance/Earthquake
+[submodule "lib/dlx-contracts"]
+	path = lib/dlx-contracts
+	url = https://github.com/delorean-exchange/dlx-contracts
