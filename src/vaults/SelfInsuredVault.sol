@@ -8,7 +8,7 @@ import { IERC20 } from "openzeppelin/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "openzeppelin/token/ERC20/utils/SafeERC20.sol";
 
 /* import { IYieldTracker } from "../interfaces/IYieldTracker.sol"; */
-import { IYieldSource } from "dlx/src//interfaces/IYieldSource.sol";
+import { IYieldSource } from "dlx/src/interfaces/IYieldSource.sol";
 import { ISelfInsuredVault } from "../interfaces/ISelfInsuredVault.sol";
 import { IInsuranceProvider } from "../interfaces/IInsuranceProvider.sol";
 
@@ -121,6 +121,10 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
 
     function _cumulativeYield() private view returns (uint256) {
         uint256 ap = yieldSource.amountPending();
+
+        console.log("==> _cumulativeYield ap", ap);
+        console.log("==> harvestedYield     ", harvestedYield);
+
         return harvestedYield + ap;
     }
 
