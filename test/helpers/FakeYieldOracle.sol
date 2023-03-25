@@ -10,14 +10,19 @@ contract FakeYieldOracle is IYieldOracle {
     IERC20 public override generatorToken;
     IERC20 public override yieldToken;
     uint256 public yieldPerSecond;
+    uint256 public immutable decimals;
 
-    constructor(address generatorToken_, address yieldToken_, uint256 yieldPerSecond_) {
+    constructor(address generatorToken_,
+                address yieldToken_,
+                uint256 yieldPerSecond_,
+                uint256 decimals_) {
         generatorToken = IERC20(generatorToken_);
         yieldToken = IERC20(yieldToken_);
         yieldPerSecond = yieldPerSecond_;
+        decimals = decimals_;
     }
 
-    function projectYield(uint256 duration) external override view returns (uint256) {
-        return yieldPerSecond * duration;
+    function projectYield(uint256 amount, uint256 duration) external override view returns (uint256) {
+        return (amount * yieldPerSecond * duration) / (1e18);
     }
 }

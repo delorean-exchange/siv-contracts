@@ -33,17 +33,23 @@ contract FakeYieldSource is IYieldSource {
     uint256 public lastPendingBlockNumber;
     uint256 public pending;
 
-    IFakeToken public _yieldToken;
+    address public _yieldToken;
     IFakeToken public _generatorToken;
     address[] public holders;
     address public owner;
+    bool public isWeth;
 
-    constructor(uint256 yieldPerBlock_) {
+    constructor(uint256 yieldPerBlock_, address weth_) {
         startBlockNumber = block.number;
         yieldPerBlock = yieldPerBlock_;
         owner = msg.sender;
 
-        _yieldToken = IFakeToken(new FakeToken("TestYS: fake ETH", "fakeETH", 0));
+        isWeth = address(weth_) != address(0);
+        if (isWeth) {
+            _yieldToken = weth_;
+        } else {
+            _yieldToken = address(new FakeToken("TestYS: fake ETH", "fakeETH", 0));
+        }
         _generatorToken = IFakeToken(new CallbackFakeToken("TestYS: fake GLP", "fakeGLP", 0, address(this)));
     }
 
@@ -52,7 +58,7 @@ contract FakeYieldSource is IYieldSource {
     }
 
     function setYieldToken(address yieldToken_) external {
-        _yieldToken = IFakeToken(yieldToken_);
+        _yieldToken = yieldToken_;
     }
 
     function generatorToken() external override view returns (IERC20) {
@@ -82,8 +88,8 @@ contract FakeYieldSource is IYieldSource {
     }
 
     function mintBoth(address who, uint256 amount) public {
-        _generatorToken.publicMint(who, amount);
-        _yieldToken.publicMint(who, amount);
+        mintGenerator(who, amount);
+        mintYield(who, amount);
     }
 
     function mintGenerator(address who, uint256 amount) public {
@@ -91,13 +97,18 @@ contract FakeYieldSource is IYieldSource {
     }
 
     function mintYield(address who, uint256 amount) public {
-        _yieldToken.publicMint(who, amount);
+        if (isWeth) {
+            IERC20(_yieldToken).transfer(who, amount);
+        } else {
+            IFakeToken(_yieldToken).publicMint(who, amount);
+        }
     }
 
     function harvest() public override {
         assert(owner != address(this));
         uint256 amount = this.amountPending();
-        _yieldToken.publicMint(address(this), amount);
+        mintYield(address(this), amount);
+        /* _yieldToken.publicMint(address(this), amount); */
         IERC20(_yieldToken).safeTransfer(owner, amount);
         lastHarvestBlockNumber = block.number;
         lastPendingBlockNumber = block.number;

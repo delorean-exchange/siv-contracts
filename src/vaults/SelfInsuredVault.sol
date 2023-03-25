@@ -383,10 +383,10 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
         // Assume all providers have same epoch duration
         IInsuranceProvider provider0 = providers[0];
         uint256 epochDuration = provider0.epochDuration();
-        return yieldSource.amountGenerator() * oracle.projectYield(epochDuration);
+        return oracle.projectYield(yieldSource.amountGenerator(), epochDuration);
     }
 
-    function _purchaseForNextEpoch(uint256 i, uint256 projectedYield) internal {
+    function _purchaseForNextEpoch(uint256 i, uint256 amount) internal {
         IInsuranceProvider provider = providers[i];
         require(provider.isNextEpochPurchasable(), "SIV: not purchasable");
 
@@ -399,44 +399,42 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
         require(epochInfo.premiumPaid == 0, "SIV: already purchased");
 
         uint256 weight = weights[i];
-        uint256 amount = (weight * projectedYield) / WEIGHTS_PRECISION;
 
         IERC20(provider.paymentToken()).approve(address(provider), amount);
         provider.purchaseForNextEpoch(amount);
         epochInfo.premiumPaid = amount;
     }
 
-    // `limitE18` is the max price to pay in terms fo NPV tokens for yield,
-    // in terms of fraction per 1e18. This price limit caps the incremental DLX
-    // discount that we pay for borrowing.
-    function selfInsureForNextEpoch(uint256 limitE18) external onlyAdmin {
+    // `minBps` is the minimum yield fronted from Delorean, in terms of basis points.
+    function selfInsureForNextEpoch(uint256 minBps) external onlyAdmin {
         uint256 projectedYield = _projectEpochYield();
 
         // Get epoch's yield upfront via Delorean
         uint256 sum = 0;
         for (uint256 i = 0; i < weights.length; i++) {
-            sum += weights[i];
+            sum += (projectedYield * weights[i]) / WEIGHTS_PRECISION;
         }
+        uint256 minOut = (sum * minBps) / 100_00;
+        uint256 amountLock = yieldSource.amountGenerator() / 2;
+        yieldSource.withdraw(amountLock, false, address(this));
+        yieldSource.generatorToken().approve(address(dlxSwap), amountLock);
+        uint256 actualOut = dlxSwap.lockForYield(address(this),
+                                                 amountLock,
+                                                 sum,
+                                                 minOut,
+                                                 0,
+                                                 new bytes(0));
 
-        console.log("Yield token is:", address(yieldSource.yieldToken()));
-        console.log("NPV token is:", address(dlxSwap.npvToken()));
-        
-        if (dlxSwap.npvToken() > yieldSource.yieldToken()) {
-            console.log("Inverting");
-            // npvToken is token1, so invert limitE18
-            limitE18 = (1e18 ** 2) / limitE18;
-        }
-
-        uint256 sqrtLimitX96 = Math.sqrtX96(limitE18);
-
-        console.log("limitE18 ", limitE18);
-        console.log("sqrtLimit", sqrtLimitX96);
-
-        return;
+        console.log("actualOut      ", actualOut);
+        console.log("actualOut - min", actualOut - minOut);
+        console.log("sum - actualOut", sum - actualOut);
+        console.log("YT balance     ", yieldSource.yieldToken().balanceOf(address(this)));
+        console.log("PT balance     ", providers[0].paymentToken().balanceOf(address(this)));
 
         // Purchase insurance via Y2K
         for (uint256 i = 0; i < providers.length; i++) {
-            _purchaseForNextEpoch(i, projectedYield);
+            uint256 amount = (actualOut * weights[i]) / WEIGHTS_PRECISION;
+            _purchaseForNextEpoch(i, amount);
         }
     }
 }

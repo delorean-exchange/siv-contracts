@@ -7,6 +7,8 @@ import { IERC20 } from "openzeppelin/token/ERC20/IERC20.sol";
 
 import { ControllerHelper } from "y2k-earthquake/test/ControllerHelper.sol";
 import { Vault } from "y2k-earthquake/src/Vault.sol";
+import { VaultFactory, TimeLock} from "y2k-earthquake/src/VaultFactory.sol";
+import { Controller } from "y2k-earthquake/src/Controller.sol"; 
 
 import { BaseTest } from "./BaseTest.sol";
 import { BaseTest as DLXBaseTest } from "dlx/test/BaseTest.sol";
@@ -70,7 +72,8 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         DLXFakeYieldSource source = new DLXFakeYieldSource(200);
         FakeYieldOracle oracle = new FakeYieldOracle(address(source.generatorToken()),
                                                      address(source.yieldToken()),
-                                                     200);
+                                                     200,
+                                                     18);
 
         // TODO: fix import namespacing
         address gtA = address(source.generatorToken());
@@ -290,7 +293,8 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         FakeYieldTracker tracker = new FakeYieldTracker(200);
         FakeYieldOracle oracle = new FakeYieldOracle(address(tracker.generatorToken()),
                                                      address(tracker.yieldToken()),
-                                                     200);
+                                                     200,
+                                                     18);
 
         IERC20 gt = IERC20(tracker.generatorToken());
         IERC20 yt = IERC20(tracker.yieldToken());
@@ -454,19 +458,25 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
     }
 
     function testPurchaseWithDLXFutureYield() public {
-        depositDepeg();
+        // Send lots of WETH to vaultSource
+        uint256 wethAmount = 1000000e18;
+        vm.deal(address(this), wethAmount);
+        IWrappedETH(WETH).deposit{value: wethAmount}();
 
-        // TODO: Consolidate this setup code? it is duped in `testDepegYieldAccounting`
-        /* DLXFakeYieldSource vaultSource = new DLXFakeYieldSource(200); */
-        FakeYieldSource3 vaultSource = new FakeYieldSource3(200);
+        FakeYieldSource3 vaultSource = new FakeYieldSource3(200, WETH);
+        IERC20(WETH).transfer(address(vaultSource), wethAmount);
+
         FakeYieldOracle oracle = new FakeYieldOracle(address(vaultSource.generatorToken()),
                                                      address(vaultSource.yieldToken()),
-                                                     200);
-
+                                                     200,
+                                                     18);
         generatorToken = IERC20(vaultSource.generatorToken());
         yieldToken = IERC20(vaultSource.yieldToken());
+        vaultSource.mintBoth(ALICE, 10e18);
 
-        // TODO: move this to helper library
+        depositDepeg();
+
+        // TODO: Consolidate this setup code
         // -- Set up Delorean market --/
         YieldData dataDebt = new YieldData(20);
         YieldData dataCredit = new YieldData(20);
@@ -477,17 +487,19 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
                                address(dataCredit),
                                address(discounter),
                                1e18);
+        slice.setDebtFee(10_0);   // 10% fee on nominal - npv
+        slice.setCreditFee(10_0); // 10% fee on total purchase
+
         vaultSource.setOwner(address(slice));
         dataDebt.setWriter(address(slice));
         dataCredit.setWriter(address(slice));
 
-        vaultSource.mintBoth(ALICE, 1000000e18);
+        vaultSource.mintBoth(ALICE, 1000e18);
 
         npvToken = slice.npvToken();
 
         console.log("npvToken", address(npvToken));
         console.log("yieldToken", address(yieldToken));
-
 
         // Uniswap V3 setup for Delorean
         manager = INonfungiblePositionManager(arbitrumNonfungiblePositionManager);
@@ -501,9 +513,37 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         }
         pool = new UniswapV3LiquidityPool(address(uniswapV3Pool), arbitrumSwapRouter, arbitrumQuoterV2);
         npvSwap = new NPVSwap(address(npvToken), address(slice), address(pool));
-
         console.log("made the swap:", address(npvSwap));
 
+        // Add liquidity
+        vm.startPrank(ALICE);
+        generatorToken.approve(address(npvSwap), 1000e18);
+        npvSwap.lockForNPV(ALICE, ALICE, 1000e18, 10e18, new bytes(0));
+
+        uint256 token0Amount = 1e18;
+        uint256 token1Amount = 1e18;
+        vaultSource.mintGenerator(ALICE, 1e18);
+        vaultSource.mintYield(ALICE, 1e18);
+
+        INonfungiblePositionManager.MintParams memory params = INonfungiblePositionManager.MintParams({
+            token0: uniswapV3Pool.token0(),
+            token1: uniswapV3Pool.token1(),
+            fee: 3000,
+            tickLower: -180,
+            tickUpper: 180,
+            amount0Desired: token0Amount,
+            amount1Desired: token1Amount,
+            amount0Min: 0,
+            amount1Min: 0,
+            recipient: ALICE,
+            deadline: block.timestamp + 1 });
+        assertEq(uniswapV3Pool.liquidity(), 0);
+        IERC20(params.token0).approve(address(manager), token0Amount);
+        IERC20(params.token1).approve(address(manager), token1Amount);
+        manager.mint(params);
+        assertTrue(uniswapV3Pool.liquidity() > 0);
+        vm.stopPrank();
+        console.log("Delorean setup complete");
         // -- Delorean setup complete -- //
 
         vm.prank(ADMIN);
@@ -535,16 +575,13 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         vm.prank(ADMIN);
         vault.setInsuranceProviders(providers, weights);
 
-        vaultSource.mintGenerator(ALICE, 10e18);
-
         // Deposit into the vault
         vm.startPrank(ALICE);
         generatorToken.approve(address(vault), 2e18);
-        assertEq(vault.previewDeposit(2e18), 2e18);
         vault.deposit(2e18, ALICE);
         vm.stopPrank();
 
         vm.prank(ADMIN);
-        vault.selfInsureForNextEpoch(11e17);
+        vault.selfInsureForNextEpoch(99_00);
     }
 }
