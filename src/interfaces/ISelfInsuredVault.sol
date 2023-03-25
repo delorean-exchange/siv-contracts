@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import "openzeppelin-contracts/contracts/interfaces/IERC4626.sol";
+import { IERC4626 } from  "openzeppelin-contracts/contracts/interfaces/IERC4626.sol";
 
 /* interface ISelfInsuredVault is IERC4626 { */
 interface ISelfInsuredVault  {

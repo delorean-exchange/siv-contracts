@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import "./BaseTest.sol";
+import { BaseTest } from "./BaseTest.sol";
 
-import "./helpers/FakeToken.sol";
-import "./helpers/FakeYieldTracker.sol";
+import { FakeToken } from "./helpers/FakeToken.sol";
+import { FakeYieldTracker } from "./helpers/FakeYieldTracker.sol";
 
 contract FakeYieldTrackerTest is BaseTest {
     function testYieldSource() public {

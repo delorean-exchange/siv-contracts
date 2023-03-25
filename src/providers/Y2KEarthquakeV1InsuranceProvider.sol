@@ -6,9 +6,9 @@ import { Ownable } from "openzeppelin/access/Ownable.sol";
 import { IERC20 } from "openzeppelin/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "openzeppelin/token/ERC20/utils/SafeERC20.sol";
 import { ERC1155Holder } from "openzeppelin/token/ERC1155/utils/ERC1155Holder.sol";
-import "y2k-earthquake/src/Vault.sol";
+import { Vault } from  "y2k-earthquake/src/Vault.sol";
 
-import "../interfaces/IInsuranceProvider.sol";
+import { IInsuranceProvider } from  "../interfaces/IInsuranceProvider.sol";
 
 contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC1155Holder {
     using SafeERC20 for IERC20;
@@ -43,6 +43,8 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
         int256 len = int256(vault.epochsLength());
         for (int256 i = len - 1; i >= 0 && i > len - 2; i--) {
             uint256 epochId = vault.epochs(uint256(i));
+            // TODO: if current epoch is manually ended, should still return it's id
+            // vault.idEpochEnded(epochId) --> 
             if (block.timestamp > vault.idEpochBegin(epochId) && !vault.idEpochEnded(epochId)) {
                 return epochId;
             }
@@ -59,6 +61,7 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
         uint256 len = vault.epochsLength();
         if (len == 0) return 0;
         uint256 epochId = vault.epochs(len - 1);
+        // TODO: what if there are two non-started epochs? handle it with a loop
         if (block.timestamp > vault.idEpochBegin(epochId)) return 0;
         return epochId;
     }
@@ -79,8 +82,9 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
     function epochDuration() external override view returns (uint256) {
         // TODO: Confirm with Y2K team that epochs will be 1 week long
         uint256 id = _nextEpoch();
-        uint256 beginTS = vault.idEpochBegin(id);
-        return 7 * 24 * 3600;
+        /* uint256 beginTS = vault.idEpochBegin(id); */
+        /* return 7 * 24 * 3600; */
+        return id - vault.idEpochBegin(id);
     }
 
     function isNextEpochPurchasable() external override view returns (bool) {
@@ -98,8 +102,7 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
 
     function purchaseForNextEpoch(uint256 amountPremium) external override {
         paymentToken.safeTransferFrom(msg.sender, address(this), amountPremium);
-        paymentToken.approve(address(vault), 0);
-        paymentToken.approve(address(vault), amountPremium);
+        paymentToken.safeApprove(address(vault), amountPremium);
         vault.deposit(_nextEpoch(), amountPremium, address(this));
     }
 

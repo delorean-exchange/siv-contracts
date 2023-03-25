@@ -1,10 +1,10 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.4;
 
-import "./FakeToken.sol";
-import "../../src/interfaces/IYieldTracker.sol";
-
 import "forge-std/console.sol";
+
+import { FakeToken } from  "./FakeToken.sol";
+import { IYieldTracker } from "../../src/interfaces/IYieldTracker.sol";
 
 
 contract CallbackFakeToken is FakeToken {

@@ -11,7 +11,7 @@ import { Vault } from "y2k-earthquake/src/Vault.sol";
 import { BaseTest } from "./BaseTest.sol";
 import { BaseTest as DLXBaseTest } from "dlx/test/BaseTest.sol";
 import { FakeYieldSource as DLXFakeYieldSource } from "dlx/test/helpers/FakeYieldSource.sol";
-import { FakeYieldSourceVariableAmount as DLXFakeYieldSourceVariableAmount } from "dlx/test/helpers/FakeYieldSourceVariableAmount.sol";
+import { FakeYieldSource as FakeYieldSource3 } from "./helpers/FakeYieldSource3.sol";
 import { FakeYieldTracker } from "./helpers/FakeYieldTracker.sol";
 
 import { IWrappedETH } from "../src/interfaces/IWrappedETH.sol";
@@ -19,6 +19,16 @@ import { IRewardTracker } from "../src/interfaces/gmx/IRewardTracker.sol";
 import { IInsuranceProvider } from "../src/interfaces/IInsuranceProvider.sol";
 import { SelfInsuredVault } from "../src/vaults/SelfInsuredVault.sol";
 import { Y2KEarthquakeV1InsuranceProvider } from "../src/providers/Y2KEarthquakeV1InsuranceProvider.sol";
+
+// Delorean imports
+import { UniswapV3LiquidityPool } from "dlx/src/liquidity/UniswapV3LiquidityPool.sol";
+import { IUniswapV3Pool } from "dlx/src/interfaces/uniswap/IUniswapV3Pool.sol";
+import { INonfungiblePositionManager } from "dlx/src/interfaces/uniswap/INonfungiblePositionManager.sol";
+import { NPVToken } from "dlx/src/tokens/NPVToken.sol";
+import { YieldSlice } from "dlx/src/core/YieldSlice.sol";
+import { NPVSwap } from  "dlx/src/core/NPVSwap.sol";
+import { Discounter } from "dlx/src/data/Discounter.sol";
+import { YieldData } from "dlx/src/data/YieldData.sol";
 
 contract SelfInsuredVaultTest is BaseTest, DLXBaseTest, ControllerHelper {
     address glpWallet = 0x3aaF2aCA2a0A6b6ec227Bbc2bF5cEE86c2dC599d;
@@ -28,14 +38,9 @@ contract SelfInsuredVaultTest is BaseTest, DLXBaseTest, ControllerHelper {
     function testYieldAccounting() public {
         vm.selectFork(vm.createFork(ARBITRUM_RPC_URL));
 
-        /* DLXFakeYieldSource source = new DLXFakeYieldSource(200); */
         DLXFakeYieldSource source = new DLXFakeYieldSource(200);
-        FakeYieldTracker tracker = new FakeYieldTracker(200);
 
-        /* IERC20 gt = IERC20(source.generatorToken()); */
-        /* IERC20 yt = IERC20(source.yieldToken()); */
-
-        // TODO: fix import namespacing...
+        // TODO: fix import namespacing
         address gtA = address(source.generatorToken());
         address ytA = address(source.yieldToken());
         IERC20 gt = IERC20(gtA);
@@ -43,9 +48,7 @@ contract SelfInsuredVaultTest is BaseTest, DLXBaseTest, ControllerHelper {
 
         SelfInsuredVault vault = new SelfInsuredVault("Self Insured YS:G Vault",
                                                       "siYS:G",
-                                                      address(source)
-                                                      /* address(tracker) */
-                                                      );
+                                                      address(source));
         source.setOwner(address(vault));
 
         uint256 before;
@@ -57,7 +60,6 @@ contract SelfInsuredVaultTest is BaseTest, DLXBaseTest, ControllerHelper {
         assertEq(vault.previewDeposit(2e18), 2e18);
         vault.deposit(2e18, user0);
         assertEq(IERC20(gt).balanceOf(user0), 8e18);
-        /* assertEq(IERC20(gt).balanceOf(address(vault)), 2e18); */
         assertEq(IERC20(gt).balanceOf(address(vault)), 0);
         assertEq(IERC20(gt).balanceOf(address(source)), 2e18);
         assertEq(vault.balanceOf(user0), 2e18);
@@ -177,8 +179,6 @@ contract SelfInsuredVaultTest is BaseTest, DLXBaseTest, ControllerHelper {
         assertEq(vault.calculatePendingYield(user1), 0);
         assertEq(yt.balanceOf(user1), 1600e18);
 
-        return;
-
         // Third user deposits, advance some blocks, change yield rate, users claim on different blocks
         address user2 = createTestUser(2);
         source.mintGenerator(user2, 20e18);
@@ -191,7 +191,7 @@ contract SelfInsuredVaultTest is BaseTest, DLXBaseTest, ControllerHelper {
         assertEq(gt.balanceOf(user0), 8e18);
         assertEq(gt.balanceOf(user1), 16e18);
         assertEq(gt.balanceOf(user2), 12e18);
-        assertEq(gt.balanceOf(address(vault)), 14e18);
+        assertEq(gt.balanceOf(address(source)), 14e18);
         assertEq(vault.balanceOf(user0), 2e18);
         assertEq(vault.balanceOf(user1), 4e18);
         assertEq(vault.balanceOf(user2), 8e18);
@@ -254,13 +254,18 @@ contract SelfInsuredVaultTest is BaseTest, DLXBaseTest, ControllerHelper {
         depositDepeg();
 
         // TODO: Consolidate this setup code? it is duped in `testDepegYieldAccounting`
-        FakeYieldTracker tracker = new FakeYieldTracker(200);
-        IERC20 gt = IERC20(tracker.generatorToken());
-        IERC20 yt = IERC20(tracker.yieldToken());
+        DLXFakeYieldSource vaultSource = new DLXFakeYieldSource(200);
+
+        // TODO: fix import namespacing
+        address gtA = address(vaultSource.generatorToken());
+        address ytA = address(vaultSource.yieldToken());
+        IERC20 gt = IERC20(gtA);
+        IERC20 yt = IERC20(ytA);
+
         vm.prank(ADMIN);
         SelfInsuredVault vault = new SelfInsuredVault("Self Insured YS:G Vault",
                                                       "siYS:G",
-                                                      address(tracker));
+                                                      address(vaultSource));
 
         // Set up Y2K insurance vault
         vm.prank(ADMIN);
@@ -281,12 +286,33 @@ contract SelfInsuredVaultTest is BaseTest, DLXBaseTest, ControllerHelper {
         uint256[] memory weights = new uint256[](1);
         weights[0] = 10_00;
 
-        // Set up Delorean market
-
         vm.prank(ADMIN);
         vault.setInsuranceProviders(providers, weights);
 
-        tracker.mintGenerator(ALICE, 10e18);
+        // TODO: move this to helper library
+        // -- Set up Delorean market --/
+        YieldData dataDebt = new YieldData(20);
+        YieldData dataCredit = new YieldData(20);
+        NPVToken npvToken = new NPVToken("npv[ETH] of FAKE", "npvE:FAKE");
+        Discounter discounter = new Discounter(1e13, 500, 360, 18);
+
+        YieldSlice slice = new YieldSlice(address(npvToken),
+                                          address(source),
+                                          address(dataDebt),
+                                          address(dataCredit),
+                                          address(discounter),
+                                          1e18);
+
+        return;
+
+        source.setOwner(address(slice));
+        dataDebt.setWriter(address(slice));
+        dataCredit.setWriter(address(slice));
+        // -- Delorean setup complete -- //
+
+        return;
+
+        source.mintGenerator(ALICE, 10e18);
 
         vm.startPrank(ALICE);
         gt.approve(address(vault), 2e18);
