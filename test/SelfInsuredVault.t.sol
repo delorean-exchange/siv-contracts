@@ -13,6 +13,7 @@ import { BaseTest as DLXBaseTest } from "dlx/test/BaseTest.sol";
 import { FakeYieldSource as DLXFakeYieldSource } from "dlx/test/helpers/FakeYieldSource.sol";
 import { FakeYieldSource as FakeYieldSource3 } from "./helpers/FakeYieldSource3.sol";
 import { FakeYieldTracker } from "./helpers/FakeYieldTracker.sol";
+import { FakeYieldOracle } from "./helpers/FakeYieldOracle.sol";
 
 import { IWrappedETH } from "../src/interfaces/IWrappedETH.sol";
 import { IRewardTracker } from "../src/interfaces/gmx/IRewardTracker.sol";
@@ -21,17 +22,45 @@ import { SelfInsuredVault } from "../src/vaults/SelfInsuredVault.sol";
 import { Y2KEarthquakeV1InsuranceProvider } from "../src/providers/Y2KEarthquakeV1InsuranceProvider.sol";
 
 // Delorean imports
+
 import { UniswapV3LiquidityPool } from "dlx/src/liquidity/UniswapV3LiquidityPool.sol";
 import { IUniswapV3Pool } from "dlx/src/interfaces/uniswap/IUniswapV3Pool.sol";
 import { INonfungiblePositionManager } from "dlx/src/interfaces/uniswap/INonfungiblePositionManager.sol";
+import { IUniswapV3Factory } from "dlx/src/interfaces/uniswap/IUniswapV3Factory.sol";
 import { NPVToken } from "dlx/src/tokens/NPVToken.sol";
 import { YieldSlice } from "dlx/src/core/YieldSlice.sol";
 import { NPVSwap } from  "dlx/src/core/NPVSwap.sol";
 import { Discounter } from "dlx/src/data/Discounter.sol";
 import { YieldData } from "dlx/src/data/YieldData.sol";
 
-contract SelfInsuredVaultTest is BaseTest, DLXBaseTest, ControllerHelper {
+/* contract SelfInsuredVaultTest is BaseTest, DLXBaseTest, ControllerHelper { */
+contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
+    // From https://docs.uniswap.org/contracts/v3/reference/deployments
+    address public arbitrumUniswapV3Factory = 0x1F98431c8aD98523631AE4a59f267346ea31F984;
+    address public arbitrumNonfungiblePositionManager = 0xC36442b4a4522E871399CD717aBDD847Ab11FE88;
+    address public arbitrumSwapRouter = 0xE592427A0AEce92De3Edee1F18E0157C05861564;
+    address public arbitrumQuoterV2 = 0x61fFE014bA17989E743c5F6cB21bF9697530B21e;
+    address public arbitrumWeth = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
+
+    NPVToken public npvToken;
+    NPVSwap public npvSwap;
+    YieldSlice public slice;
+    YieldData public dataDebt;
+    YieldData public dataCredit;
+    Discounter public discounter;
+
+    IERC20 public generatorToken;
+    IERC20 public yieldToken;
+
+    UniswapV3LiquidityPool public pool;
+    IUniswapV3Pool public uniswapV3Pool;
+    INonfungiblePositionManager public manager;
+
     address glpWallet = 0x3aaF2aCA2a0A6b6ec227Bbc2bF5cEE86c2dC599d;
+
+    /* UniswapV3LiquidityPool public pool; */
+    /* IUniswapV3Pool public uniswapV3Pool; */
+    /* INonfungiblePositionManager public manager; */
 
     IRewardTracker public gmxRewardsTracker = IRewardTracker(0x4e971a87900b931fF39d1Aad67697F49835400b6);
 
@@ -39,6 +68,9 @@ contract SelfInsuredVaultTest is BaseTest, DLXBaseTest, ControllerHelper {
         vm.selectFork(vm.createFork(ARBITRUM_RPC_URL));
 
         DLXFakeYieldSource source = new DLXFakeYieldSource(200);
+        FakeYieldOracle oracle = new FakeYieldOracle(address(source.generatorToken()),
+                                                     address(source.yieldToken()),
+                                                     200);
 
         // TODO: fix import namespacing
         address gtA = address(source.generatorToken());
@@ -48,7 +80,9 @@ contract SelfInsuredVaultTest is BaseTest, DLXBaseTest, ControllerHelper {
 
         SelfInsuredVault vault = new SelfInsuredVault("Self Insured YS:G Vault",
                                                       "siYS:G",
-                                                      address(source));
+                                                      address(source),
+                                                      address(oracle),
+                                                      address(0));
         source.setOwner(address(vault));
 
         uint256 before;
@@ -250,86 +284,22 @@ contract SelfInsuredVaultTest is BaseTest, DLXBaseTest, ControllerHelper {
         assertEq(yt.balanceOf(user2), 6400e18);
     }
 
-    function testPurchaseWithDLXFutureYield() public {
-        depositDepeg();
-
-        // TODO: Consolidate this setup code? it is duped in `testDepegYieldAccounting`
-        DLXFakeYieldSource vaultSource = new DLXFakeYieldSource(200);
-
-        // TODO: fix import namespacing
-        address gtA = address(vaultSource.generatorToken());
-        address ytA = address(vaultSource.yieldToken());
-        IERC20 gt = IERC20(gtA);
-        IERC20 yt = IERC20(ytA);
-
-        vm.prank(ADMIN);
-        SelfInsuredVault vault = new SelfInsuredVault("Self Insured YS:G Vault",
-                                                      "siYS:G",
-                                                      address(vaultSource));
-
-        // Set up Y2K insurance vault
-        vm.prank(ADMIN);
-        vaultFactory.createNewMarket(FEE, TOKEN_FRAX, DEPEG_AAA, beginEpoch, endEpoch, ORACLE_FRAX, "y2kFRAX_99*");
-
-        hedge = vaultFactory.getVaults(1)[0];
-        risk = vaultFactory.getVaults(1)[1];
-
-        vHedge = Vault(hedge);
-        vRisk = Vault(risk);
-
-        // Set up the insurance provider
-        Y2KEarthquakeV1InsuranceProvider provider = new Y2KEarthquakeV1InsuranceProvider(address(vHedge));
-
-        // Set the insurance provider at 10% of expected yield
-        IInsuranceProvider[] memory providers = new IInsuranceProvider[](1);
-        providers[0] = IInsuranceProvider(provider);
-        uint256[] memory weights = new uint256[](1);
-        weights[0] = 10_00;
-
-        vm.prank(ADMIN);
-        vault.setInsuranceProviders(providers, weights);
-
-        // TODO: move this to helper library
-        // -- Set up Delorean market --/
-        YieldData dataDebt = new YieldData(20);
-        YieldData dataCredit = new YieldData(20);
-        NPVToken npvToken = new NPVToken("npv[ETH] of FAKE", "npvE:FAKE");
-        Discounter discounter = new Discounter(1e13, 500, 360, 18);
-
-        YieldSlice slice = new YieldSlice(address(npvToken),
-                                          address(source),
-                                          address(dataDebt),
-                                          address(dataCredit),
-                                          address(discounter),
-                                          1e18);
-
-        return;
-
-        source.setOwner(address(slice));
-        dataDebt.setWriter(address(slice));
-        dataCredit.setWriter(address(slice));
-        // -- Delorean setup complete -- //
-
-        return;
-
-        source.mintGenerator(ALICE, 10e18);
-
-        vm.startPrank(ALICE);
-        gt.approve(address(vault), 2e18);
-        assertEq(vault.previewDeposit(2e18), 2e18);
-        vault.deposit(2e18, ALICE);
-    }
-
     function testDepegYieldAccounting() public {
         depositDepeg();
 
         FakeYieldTracker tracker = new FakeYieldTracker(200);
+        FakeYieldOracle oracle = new FakeYieldOracle(address(tracker.generatorToken()),
+                                                     address(tracker.yieldToken()),
+                                                     200);
+
         IERC20 gt = IERC20(tracker.generatorToken());
         IERC20 yt = IERC20(tracker.yieldToken());
         vm.prank(ADMIN);
         SelfInsuredVault vault = new SelfInsuredVault("Self Insured YS:G Vault",
                                                       "siYS:G",
-                                                      address(tracker));
+                                                      address(tracker),
+                                                      address(oracle),
+                                                      address(0));
 
         // Set up Y2K insurance vault
         vm.prank(ADMIN);
@@ -481,5 +451,100 @@ contract SelfInsuredVaultTest is BaseTest, DLXBaseTest, ControllerHelper {
         /* uint256 before = IERC20(weth).balanceOf(user0); */
         /* uint256 result = provider.claimPayouts(); */
         /* uint256 delta = IERC20(weth).balanceOf(user0) - before; */
+    }
+
+    function testPurchaseWithDLXFutureYield() public {
+        depositDepeg();
+
+        // TODO: Consolidate this setup code? it is duped in `testDepegYieldAccounting`
+        /* DLXFakeYieldSource vaultSource = new DLXFakeYieldSource(200); */
+        FakeYieldSource3 vaultSource = new FakeYieldSource3(200);
+        FakeYieldOracle oracle = new FakeYieldOracle(address(vaultSource.generatorToken()),
+                                                     address(vaultSource.yieldToken()),
+                                                     200);
+
+        generatorToken = IERC20(vaultSource.generatorToken());
+        yieldToken = IERC20(vaultSource.yieldToken());
+
+        // TODO: move this to helper library
+        // -- Set up Delorean market --/
+        YieldData dataDebt = new YieldData(20);
+        YieldData dataCredit = new YieldData(20);
+        Discounter discounter = new Discounter(1e13, 500, 360, 18);
+        slice = new YieldSlice("npvETH-FAKE",
+                               address(vaultSource),
+                               address(dataDebt),
+                               address(dataCredit),
+                               address(discounter),
+                               1e18);
+        vaultSource.setOwner(address(slice));
+        dataDebt.setWriter(address(slice));
+        dataCredit.setWriter(address(slice));
+
+        vaultSource.mintBoth(ALICE, 1000000e18);
+
+        npvToken = slice.npvToken();
+
+        console.log("npvToken", address(npvToken));
+        console.log("yieldToken", address(yieldToken));
+
+
+        // Uniswap V3 setup for Delorean
+        manager = INonfungiblePositionManager(arbitrumNonfungiblePositionManager);
+        (address token0, address token1) = address(npvToken) < address(yieldToken)
+            ? (address(npvToken), address(yieldToken))
+            : (address(yieldToken), address(npvToken));
+        uniswapV3Pool = IUniswapV3Pool(IUniswapV3Factory(arbitrumUniswapV3Factory).getPool(token0, token1, 3000));
+        if (address(uniswapV3Pool) == address(0)) {
+            uniswapV3Pool = IUniswapV3Pool(IUniswapV3Factory(arbitrumUniswapV3Factory).createPool(token0, token1, 3000));
+            IUniswapV3Pool(uniswapV3Pool).initialize(79228162514264337593543950336);
+        }
+        pool = new UniswapV3LiquidityPool(address(uniswapV3Pool), arbitrumSwapRouter, arbitrumQuoterV2);
+        npvSwap = new NPVSwap(address(npvToken), address(slice), address(pool));
+
+        console.log("made the swap:", address(npvSwap));
+
+        // -- Delorean setup complete -- //
+
+        vm.prank(ADMIN);
+        SelfInsuredVault vault = new SelfInsuredVault("Self Insured YS:G Vault",
+                                                      "siYS:G",
+                                                      address(vaultSource),
+                                                      address(oracle),
+                                                      address(npvSwap));
+
+        // Set up Y2K insurance vault
+        vm.prank(ADMIN);
+        vaultFactory.createNewMarket(FEE, TOKEN_FRAX, DEPEG_AAA, beginEpoch, endEpoch, ORACLE_FRAX, "y2kFRAX_99*");
+
+        hedge = vaultFactory.getVaults(1)[0];
+        risk = vaultFactory.getVaults(1)[1];
+
+        vHedge = Vault(hedge);
+        vRisk = Vault(risk);
+
+        // Set up the insurance provider
+        Y2KEarthquakeV1InsuranceProvider provider = new Y2KEarthquakeV1InsuranceProvider(address(vHedge));
+
+        // Set the insurance provider at 10% of expected yield
+        IInsuranceProvider[] memory providers = new IInsuranceProvider[](1);
+        providers[0] = IInsuranceProvider(provider);
+        uint256[] memory weights = new uint256[](1);
+        weights[0] = 10_00;
+
+        vm.prank(ADMIN);
+        vault.setInsuranceProviders(providers, weights);
+
+        vaultSource.mintGenerator(ALICE, 10e18);
+
+        // Deposit into the vault
+        vm.startPrank(ALICE);
+        generatorToken.approve(address(vault), 2e18);
+        assertEq(vault.previewDeposit(2e18), 2e18);
+        vault.deposit(2e18, ALICE);
+        vm.stopPrank();
+
+        vm.prank(ADMIN);
+        vault.selfInsureForNextEpoch(11e17);
     }
 }

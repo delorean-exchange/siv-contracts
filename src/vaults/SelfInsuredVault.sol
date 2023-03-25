@@ -3,11 +3,16 @@ pragma solidity ^0.8.13;
 
 import "forge-std/console.sol";
 
+import "../libraries/Math.sol";
+
 import { ERC20 } from  "openzeppelin/token/ERC20/ERC20.sol";
 import { IERC20 } from "openzeppelin/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "openzeppelin/token/ERC20/utils/SafeERC20.sol";
 
 import { IYieldSource } from "dlx/src/interfaces/IYieldSource.sol";
+import { NPVSwap } from "dlx/src/core/NPVSwap.sol";
+
+import { IYieldOracle } from "../interfaces/IYieldOracle.sol";
 import { ISelfInsuredVault } from "../interfaces/ISelfInsuredVault.sol";
 import { IInsuranceProvider } from "../interfaces/IInsuranceProvider.sol";
 
@@ -41,7 +46,9 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
     }
     mapping(address => UserInfo) public userInfos;
 
+
     uint256 public constant PRECISION_FACTOR = 10**18;
+    uint256 public constant WEIGHTS_PRECISION = 100_00;
 
     address public admin;
     IInsuranceProvider[] public providers;
@@ -49,6 +56,8 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
     address[] public rewardTokens;
 
     IYieldSource public immutable yieldSource;
+    IYieldOracle public oracle;
+    NPVSwap public dlxSwap;
 
     // Rewards accounting
     uint256 public yieldPerTokenStored;
@@ -61,10 +70,19 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
         _;
     }
 
-    constructor(string memory name_, string memory symbol_, address yieldSource_) ERC20(name_, symbol_) {
+    constructor(string memory name_,
+                string memory symbol_,
+                address yieldSource_,
+                address oracle_,
+                address dlxSwap_) ERC20(name_, symbol_) {
+        require(yieldSource_ != address(0), "SIV: zero source");
+        require(oracle_ != address(0), "SIV: zero oracle");
+
         admin = msg.sender;
 
         yieldSource = IYieldSource(yieldSource_);
+        oracle = IYieldOracle(oracle_);
+        dlxSwap = NPVSwap(dlxSwap_);
         rewardTokens = new address[](1);
         rewardTokens[0] = address(IYieldSource(yieldSource_).yieldToken());
     }
@@ -75,6 +93,10 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
 
     function epochsLength(address provider) public view returns (uint256) {
         return providerEpochs[provider].length;
+    }
+
+    function setOracle(address oracle_) external onlyAdmin {
+        oracle = IYieldOracle(oracle_);
     }
 
     // -- ERC4642: Asset -- //
@@ -344,6 +366,15 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
         // TODO: changing this mid-epoch will cause problems, find a solution.
         // TODO: possible fix is to only allow adding new providers, and adjusting
         // the weights of previous ones to 0
+
+        uint256 sum;
+        for (uint256 i = 0; i < providers_.length; i++) {
+            require(providers_[0].epochDuration() == providers_[i].epochDuration(),
+                    "SIV: same duration");
+            sum += weights_[i];
+        }
+        require(sum < WEIGHTS_PRECISION, "SIV: max weight");
+
         providers = providers_;
         weights = weights_;
     }
@@ -352,13 +383,7 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
         // Assume all providers have same epoch duration
         IInsuranceProvider provider0 = providers[0];
         uint256 epochDuration = provider0.epochDuration();
-
-        // TODO: For now, this is hard coding the forward looking yield rate.
-        // We need to add a way to estimate this, either let the admin account
-        // set it, or estimate it based on historical data.
-        uint256 yieldPerUnderlyingPerSecond = (100 * PRECISION_FACTOR) / 10e10;
-
-        return (epochDuration * this.totalSupply() * yieldPerUnderlyingPerSecond) / PRECISION_FACTOR;
+        return yieldSource.amountGenerator() * oracle.projectYield(epochDuration);
     }
 
     function _purchaseForNextEpoch(uint256 i, uint256 projectedYield) internal {
@@ -374,15 +399,42 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
         require(epochInfo.premiumPaid == 0, "SIV: already purchased");
 
         uint256 weight = weights[i];
-        uint256 amount = (weight * projectedYield) / 100_00;
+        uint256 amount = (weight * projectedYield) / WEIGHTS_PRECISION;
 
         IERC20(provider.paymentToken()).approve(address(provider), amount);
         provider.purchaseForNextEpoch(amount);
         epochInfo.premiumPaid = amount;
     }
 
-    function purchaseForNextEpoch() external onlyAdmin {
+    // `limitE18` is the max price to pay in terms fo NPV tokens for yield,
+    // in terms of fraction per 1e18. This price limit caps the incremental DLX
+    // discount that we pay for borrowing.
+    function selfInsureForNextEpoch(uint256 limitE18) external onlyAdmin {
         uint256 projectedYield = _projectEpochYield();
+
+        // Get epoch's yield upfront via Delorean
+        uint256 sum = 0;
+        for (uint256 i = 0; i < weights.length; i++) {
+            sum += weights[i];
+        }
+
+        console.log("Yield token is:", address(yieldSource.yieldToken()));
+        console.log("NPV token is:", address(dlxSwap.npvToken()));
+        
+        if (dlxSwap.npvToken() > yieldSource.yieldToken()) {
+            console.log("Inverting");
+            // npvToken is token1, so invert limitE18
+            limitE18 = (1e18 ** 2) / limitE18;
+        }
+
+        uint256 sqrtLimitX96 = Math.sqrtX96(limitE18);
+
+        console.log("limitE18 ", limitE18);
+        console.log("sqrtLimit", sqrtLimitX96);
+
+        return;
+
+        // Purchase insurance via Y2K
         for (uint256 i = 0; i < providers.length; i++) {
             _purchaseForNextEpoch(i, projectedYield);
         }
