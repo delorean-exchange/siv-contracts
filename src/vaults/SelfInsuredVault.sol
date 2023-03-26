@@ -46,7 +46,6 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
     }
     mapping(address => UserInfo) public userInfos;
 
-
     uint256 public constant PRECISION_FACTOR = 10**18;
     uint256 public constant WEIGHTS_PRECISION = 100_00;
 
@@ -54,6 +53,8 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
     IInsuranceProvider[] public providers;
     uint256[] public weights;
     address[] public rewardTokens;
+
+    uint256 lastRecordedEpochId;
 
     IYieldSource public immutable yieldSource;
     IYieldOracle public oracle;
@@ -141,12 +142,7 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
     }
 
     function _cumulativeYield() private view returns (uint256) {
-        uint256 ap = yieldSource.amountPending();
-
-        console.log("==> _cumulativeYield ap", ap);
-        console.log("==> harvestedYield     ", harvestedYield);
-
-        return harvestedYield + ap;
+        return harvestedYield + yieldSource.amountPending();
     }
 
     function _yieldPerToken() internal view returns (uint256) {
@@ -250,7 +246,8 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
         if (providers.length == 0) return;
 
         UserEpochTracker storage tracker = userEpochTrackers[user];
-        // NOTE: assuming synchronized epoch ID's
+
+        // Assuming synchronized epoch ID's, this is asserted elsewhere
         uint256 nextEpochId = providers[0].nextEpoch();
 
         // See if we need to shift nextEpoch into start/end epoch segment
@@ -274,16 +271,13 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
         require(assets <= this.maxDeposit(receiver), "SIV: max deposit");
         require(assets >= PRECISION_FACTOR, "SIV: min deposit");
 
-        console.log("_updateYield");
         _updateYield(receiver);
-        console.log("_updateProviderEpochs");
         _updateProviderEpochs(int256(assets));
-        console.log("_updateUserEpochTracker");
         _updateUserEpochTracker(receiver, int256(assets));
 
         IERC20(_asset()).safeTransferFrom(msg.sender, address(this), assets);
+        IERC20(_asset()).safeApprove(address(yieldSource), 0);
         IERC20(_asset()).safeApprove(address(yieldSource), assets);
-        console.log("Depositing into yieldSource", assets);
         yieldSource.deposit(assets, false);
         shares = assets;
         _mint(receiver, shares);
@@ -369,8 +363,7 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
 
         uint256 sum;
         for (uint256 i = 0; i < providers_.length; i++) {
-            require(providers_[0].epochDuration() == providers_[i].epochDuration(),
-                    "SIV: same duration");
+            require(providers_[0].epochDuration() == providers_[i].epochDuration(), "SIV: same duration");
             sum += weights_[i];
         }
         require(sum < WEIGHTS_PRECISION, "SIV: max weight");
@@ -380,7 +373,7 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
     }
 
     function _projectEpochYield() internal returns (uint256) {
-        // Assume all providers have same epoch duration
+        // Assume all providers have same epoch duration, this is asserted elsewhere
         IInsuranceProvider provider0 = providers[0];
         uint256 epochDuration = provider0.epochDuration();
         return oracle.projectYield(yieldSource.amountGenerator(), epochDuration);
@@ -403,6 +396,20 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
         IERC20(provider.paymentToken()).approve(address(provider), amount);
         provider.purchaseForNextEpoch(amount);
         epochInfo.premiumPaid = amount;
+    }
+
+    function pendingInsurancePayouts() external view returns (uint256) {
+        uint256 sum = 0;
+        for (uint256 i = 0; i < providers.length; i++) {
+            sum += providers[i].pendingPayouts();
+        }
+        return sum;
+    }
+
+    function claimInsurancePayouts() external {
+        for (uint256 i = 0; i < providers.length; i++) {
+            providers[i].claimPayouts();
+        }
     }
 
     // `minBps` is the minimum yield fronted from Delorean, in terms of basis points.

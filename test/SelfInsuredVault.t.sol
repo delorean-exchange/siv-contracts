@@ -9,6 +9,7 @@ import { ControllerHelper } from "y2k-earthquake/test/ControllerHelper.sol";
 import { Vault } from "y2k-earthquake/src/Vault.sol";
 import { VaultFactory, TimeLock} from "y2k-earthquake/src/VaultFactory.sol";
 import { Controller } from "y2k-earthquake/src/Controller.sol"; 
+import { FakeOracle } from "y2k-earthquake/test/oracles/FakeOracle.sol";
 
 import { BaseTest } from "./BaseTest.sol";
 import { BaseTest as DLXBaseTest } from "dlx/test/BaseTest.sol";
@@ -316,7 +317,8 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         vRisk = Vault(risk);
 
         // Set up the insurance provider
-        Y2KEarthquakeV1InsuranceProvider provider = new Y2KEarthquakeV1InsuranceProvider(address(vHedge));
+        Y2KEarthquakeV1InsuranceProvider provider = new Y2KEarthquakeV1InsuranceProvider(address(vHedge),
+                                                                                         address(vault));
 
         // Set the insurance provider at 10% of expected yield
         IInsuranceProvider[] memory providers = new IInsuranceProvider[](1);
@@ -446,12 +448,9 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         /* return; */
 
         /* vm.warp(beginEpoch + 10 days); */
-
         /* controller.triggerDepeg(SINGLE_MARKET_INDEX, endEpoch); */
-
         /* uint256 pending = provider.pendingPayouts(); */
         /* console.log("pending", pending); */
-
         /* uint256 before = IERC20(weth).balanceOf(user0); */
         /* uint256 result = provider.claimPayouts(); */
         /* uint256 delta = IERC20(weth).balanceOf(user0) - before; */
@@ -474,7 +473,15 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         yieldToken = IERC20(vaultSource.yieldToken());
         vaultSource.mintBoth(ALICE, 10e18);
 
-        depositDepeg();
+        /* depositDepeg(); */
+        vm.startPrank(ADMIN);
+        fakeOracle = new FakeOracle(ORACLE_FRAX, STRIKE_PRICE_FAKE_ORACLE);
+        vaultFactory.createNewMarket(FEE, TOKEN_FRAX, DEPEG_AAA, beginEpoch, endEpoch, address(fakeOracle), "y2kFRAX_99*");
+        vm.stopPrank();
+        hedge = vaultFactory.getVaults(1)[0];
+        risk = vaultFactory.getVaults(1)[1];
+        vHedge = Vault(hedge);
+        vRisk = Vault(risk);
 
         // TODO: Consolidate this setup code
         // -- Set up Delorean market --/
@@ -519,12 +526,10 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         vm.startPrank(ALICE);
         generatorToken.approve(address(npvSwap), 1000e18);
         npvSwap.lockForNPV(ALICE, ALICE, 1000e18, 10e18, new bytes(0));
-
         uint256 token0Amount = 1e18;
         uint256 token1Amount = 1e18;
         vaultSource.mintGenerator(ALICE, 1e18);
         vaultSource.mintYield(ALICE, 1e18);
-
         INonfungiblePositionManager.MintParams memory params = INonfungiblePositionManager.MintParams({
             token0: uniswapV3Pool.token0(),
             token1: uniswapV3Pool.token1(),
@@ -553,18 +558,18 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
                                                       address(oracle),
                                                       address(npvSwap));
 
-        // Set up Y2K insurance vault
-        vm.prank(ADMIN);
-        vaultFactory.createNewMarket(FEE, TOKEN_FRAX, DEPEG_AAA, beginEpoch, endEpoch, ORACLE_FRAX, "y2kFRAX_99*");
-
-        hedge = vaultFactory.getVaults(1)[0];
-        risk = vaultFactory.getVaults(1)[1];
-
-        vHedge = Vault(hedge);
-        vRisk = Vault(risk);
-
         // Set up the insurance provider
-        Y2KEarthquakeV1InsuranceProvider provider = new Y2KEarthquakeV1InsuranceProvider(address(vHedge));
+        Y2KEarthquakeV1InsuranceProvider provider = new Y2KEarthquakeV1InsuranceProvider(address(vHedge),
+                                                                                         address(vault));
+
+        // Bob buys the risk
+        vm.startPrank(BOB);
+        vm.deal(BOB, 200 ether);
+        IWrappedETH(WETH).deposit{value: 200 ether}();
+        IERC20(WETH).approve(address(vRisk), 200e18);
+        console.log("Purchase risk for epoch:", endEpoch);
+        vRisk.deposit(endEpoch, 200e18, BOB);
+        vm.stopPrank();
 
         // Set the insurance provider at 10% of expected yield
         IInsuranceProvider[] memory providers = new IInsuranceProvider[](1);
@@ -583,5 +588,23 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
 
         vm.prank(ADMIN);
         vault.selfInsureForNextEpoch(99_00);
+
+        console.log("total assets vHedge", vHedge.totalAssets(endEpoch));
+        console.log("total assets vRisk ", vRisk.totalAssets(endEpoch));
+
+        // Trigger a depeg
+        console.log("Pending before:", vault.pendingInsurancePayouts());
+        vm.warp(beginEpoch + 10 days);
+        controller.triggerDepeg(SINGLE_MARKET_INDEX, endEpoch);
+        console.log("Pending after: ", vault.pendingInsurancePayouts());
+
+        console.log("balance before:", IERC20(WETH).balanceOf(address(vault)));
+        vault.claimInsurancePayouts();
+        console.log("balance after: ", IERC20(WETH).balanceOf(address(vault)));
+        console.log("address(vault)", address(vault));
+
+        assertTrue(IERC20(WETH).balanceOf(address(vault)) > 199e18);
+
+        vault.pprintEpochs();
     }
 }
