@@ -80,6 +80,8 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
 
     uint256 lastRecordedEpochId;
 
+    uint256 dlxId;
+
     IYieldSource public immutable yieldSource;
     IYieldOracle public oracle;
     NPVSwap public dlxSwap;
@@ -112,6 +114,10 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
         dlxSwap = NPVSwap(dlxSwap_);
         rewardTokens = new address[](1);
         rewardTokens[0] = address(IYieldSource(yieldSource_).yieldToken());
+    }
+
+    function _min(uint256 x1, uint256 x2) private pure returns (uint256) {
+        return x1 < x2 ? x1 : x2;
     }
 
     function providersLength() public view returns (uint256) {
@@ -180,7 +186,11 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
 
     // -- ERC4642: Withdraw -- //
     function maxWithdraw(address owner) external view returns (uint256 maxAssets) {
-        return balanceOf(owner);
+        uint256 available = yieldSource.amountGenerator();
+        if (dlxId != 0 && dlxSwap.slice().remaining(dlxId) == 0) {
+            available += dlxSwap.slice().tokens(dlxId);
+        }
+        return _min(available, balanceOf(owner));
     }
 
     function previewWithdraw(uint256 assets) external view returns (uint256) {
@@ -190,6 +200,8 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
     function withdraw(uint256 assets, address receiver, address owner) external returns (uint256) {
         require(msg.sender == owner, "SIV: withdraw only owner");
         require(balanceOf(owner) >= assets, "SIV: withdraw insufficient balance");
+
+        _unlockIfNeeded();
 
         _updateYield(owner);
         _updateProviderEpochs(-int256(assets));
@@ -275,9 +287,6 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
     // Counts the depeg rewards for epochs between [startEpochId, nextEpochId)
     function _computeAccumulateDepegRewards(address user) internal view returns (uint256, uint256)  {
         UserEpochTracker storage tracker = userEpochTrackers[user];
-        console.log("=== _computeAccumulateDepegRewards ===");
-        console.log("tracker.startEpochId", tracker.startEpochId);
-        console.log("tracker.shares      ", tracker.shares);
         if (tracker.startEpochId == 0) return (0, 0);
         if (tracker.shares == 0) return (0, 0);
 
@@ -413,7 +422,6 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
     // -- Payouts -- //
     function _pendingPayouts(address who) internal view returns (uint256) {
         (uint256 deltaAccumulatdPayouts, ) = _computeAccumulateDepegRewards(who);
-        console.log("deltaAccumulatdPayouts", deltaAccumulatdPayouts);
 
         // `deltaAccumulatdPayouts` includes [startEpochId, nextEpochId), but we
         // also want [nextEpochId, currentEpochId].
@@ -504,7 +512,6 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
             uint256 before = pt.balanceOf(address(this));
             uint256 amount = providers[i].claimPayouts();
             assert(amount == pt.balanceOf(address(this)) - before);
-
             if (amount > 0) {
                 EpochInfo[] storage infos = providerEpochs[address(providers[i])];
                 infos[infos.length - 1].payout += amount;
@@ -531,6 +538,13 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
         epochInfo.premiumPaid = amount;
     }
 
+    function _unlockIfNeeded() internal {
+        if (dlxId == 0) return;
+        if (dlxSwap.slice().remaining(dlxId) != 0) return;
+        dlxSwap.slice().unlockDebtSlice(dlxId);
+        dlxId = 0;
+    }
+
     // `minBps` is the minimum yield fronted from Delorean, in terms of basis points.
     function purchaseInsuranceForNextEpoch(uint256 minBps) external onlyAdmin {
         uint256 projectedYield = _projectEpochYield();
@@ -545,7 +559,10 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
         yieldSource.withdraw(amountLock, false, address(this));
         yieldSource.generatorToken().approve(address(dlxSwap), amountLock);
 
-        console.log("GT before:", yieldSource.generatorToken().balanceOf(address(this)));
+        /* console.log("GT before 1:", yieldSource.amountGenerator()); */
+        /* console.log("GT before 2:", yieldSource.generatorToken().balanceOf(address(this))); */
+
+        _unlockIfNeeded();
 
         (uint256 id,
          uint256 actualOut) = dlxSwap.lockForYield(address(this),
@@ -554,8 +571,10 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
                                                    minOut,
                                                    0,
                                                    new bytes(0));
+        dlxId = id;
 
-        console.log("GT after: ", yieldSource.generatorToken().balanceOf(address(this)));
+        /* console.log("GT after 1: ", yieldSource.amountGenerator()); */
+        /* console.log("GT after 2: ", yieldSource.generatorToken().balanceOf(address(this))); */
 
         // Purchase insurance via Y2K
         for (uint256 i = 0; i < providers.length; i++) {

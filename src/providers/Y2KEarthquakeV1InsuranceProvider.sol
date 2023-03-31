@@ -103,7 +103,6 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
     function purchaseForNextEpoch(uint256 amountPremium) external override {
         paymentToken.safeTransferFrom(msg.sender, address(this), amountPremium);
         paymentToken.safeApprove(address(vault), amountPremium);
-        console.log("purchase hedge for:", _nextEpoch());
         vault.deposit(_nextEpoch(), amountPremium, address(this));
     }
 
@@ -143,11 +142,8 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
         // Does it correctly handle the current epoch?
         for (uint256 i = claimedEpochIndex; i < len; i++) {
             uint256 a = _claimPayoutForEpoch(vault.epochs(i));
-            console.log("claiming epoch", vault.epochs(i));
-            console.log("claiming epoch", a);
             amount += a;
         }
-        console.log("Transfer payment to", beneficiary);
         paymentToken.safeTransfer(beneficiary, amount);
         return amount;
     }

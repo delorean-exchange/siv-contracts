@@ -501,8 +501,16 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         YieldData dataDebt = new YieldData(20);
         YieldData dataCredit = new YieldData(20);
         Discounter discounter = new Discounter(1e13, 500, 360, 18);
+
+        /* vm.deal(address(this), wethAmount); */
+        /* IWrappedETH(WETH).deposit{value: wethAmount}(); */
+        /* FakeYieldSource3 dlxSource = new FakeYieldSource3(200, WETH); */
+        /* IERC20(WETH).transfer(address(dlxSource), wethAmount); */
+        // TODO: separate sources with same addresses...
+        FakeYieldSource3 dlxSource = vaultSource;
+
         slice = new YieldSlice("npvETH-FAKE",
-                               address(vaultSource),
+                               address(dlxSource),
                                address(dataDebt),
                                address(dataCredit),
                                address(discounter),
@@ -510,11 +518,11 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         slice.setDebtFee(10_0);
         slice.setCreditFee(10_0);
 
-        vaultSource.setOwner(address(slice));
+        dlxSource.setOwner(address(slice));
         dataDebt.setWriter(address(slice));
         dataCredit.setWriter(address(slice));
 
-        vaultSource.mintBoth(ALICE, 1000e18);
+        dlxSource.mintBoth(ALICE, 1000e18);
 
         npvToken = slice.npvToken();
 
@@ -538,8 +546,8 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         npvSwap.lockForNPV(ALICE, ALICE, 1000e18, 10e18, new bytes(0));
         uint256 token0Amount = 1e18;
         uint256 token1Amount = 1e18;
-        vaultSource.mintGenerator(ALICE, 1e18);
-        vaultSource.mintYield(ALICE, 1e18);
+        dlxSource.mintGenerator(ALICE, 1e18);
+        dlxSource.mintYield(ALICE, 1e18);
         INonfungiblePositionManager.MintParams memory params = INonfungiblePositionManager.MintParams({
             token0: uniswapV3Pool.token0(),
             token1: uniswapV3Pool.token1(),
@@ -601,15 +609,12 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         vm.prank(ADMIN);
         vault.purchaseInsuranceForNextEpoch(99_00);
 
-        return;
-
         // Trigger a depeg
         vm.warp(beginEpoch + 10 days);
         assertEq(epochPayout(vault, address(provider), 0), 0);
         controller.triggerDepeg(SINGLE_MARKET_INDEX, endEpoch);
 
-        assertEq(IERC20(WETH).balanceOf(address(vault)), 0);
-
+        /* assertEq(IERC20(WETH).balanceOf(address(vault)), 0); */
         vault.claimInsurancePayouts();
 
         assertTrue(IERC20(WETH).balanceOf(address(vault)) > 199e18);
