@@ -92,11 +92,11 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
         return id > 0 && block.timestamp <= vault.idEpochBegin(id);
     }
 
-    function nextEpochPurchased() external returns (uint256) {
+    function nextEpochPurchased() external view returns (uint256) {
         return vault.balanceOf(address(this), _nextEpoch());
     }
 
-    function currentEpochPurchased() external returns (uint256) {
+    function currentEpochPurchased() external view returns (uint256) {
         return vault.balanceOf(address(this), _currentEpoch());
     }
 

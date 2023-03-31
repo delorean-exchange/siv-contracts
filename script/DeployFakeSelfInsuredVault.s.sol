@@ -89,6 +89,7 @@ contract DeployFakeSelfInsuredVaultScript is BaseScript {
 
         vault = new SelfInsuredVault("Self Insured fakeGLP Vault",
                                      "sivFakeGLP",
+                                     address(vaultSource.yieldToken()),
                                      address(vaultSource),
                                      address(yieldOracle),
                                      address(npvSwap));

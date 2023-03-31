@@ -18,8 +18,8 @@ interface IInsuranceProvider {
     function isNextEpochPurchasable() external view returns (bool);
     function epochDuration() external view returns (uint256);
 
-    function nextEpochPurchased() external returns (uint256);
-    function currentEpochPurchased() external returns (uint256);
+    function nextEpochPurchased() external view returns (uint256);
+    function currentEpochPurchased() external view returns (uint256);
 
     function purchaseForNextEpoch(uint256 amountPremium) external;
 
