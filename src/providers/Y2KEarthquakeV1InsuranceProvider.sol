@@ -39,7 +39,7 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
     function _currentEpoch() internal view returns (uint256) {
         if (vault.epochsLength() == 0) return 0;
 
-        // TOOD: prob don't need a loop here
+        // TOOD: GASS: probably don't need a loop here
         int256 len = int256(vault.epochsLength());
         for (int256 i = len - 1; i >= 0 && i > len - 2; i--) {
             uint256 epochId = vault.epochs(uint256(i));
@@ -61,7 +61,9 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
         uint256 len = vault.epochsLength();
         if (len == 0) return 0;
         uint256 epochId = vault.epochs(len - 1);
-        // TODO: what if there are two non-started epochs? handle it with a loop
+        // TODO: should we handle the sitaution where there are two epochs at the end,
+        // both of which are not started? it is unlikely but may happen if there is a
+        // misconfiguration on Y2K side
         if (block.timestamp > vault.idEpochBegin(epochId)) return 0;
         return epochId;
     }
@@ -128,27 +130,18 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
     function _claimPayoutForEpoch(uint256 epochId) internal returns (uint256) {
         uint256 assets = vault.balanceOf(address(this), epochId);
         uint256 amount = vault.withdraw(epochId, assets, address(this), address(this));
-        console.log("claim for epoch gave:", epochId, assets);
-        console.log("claim for epoch gave:", epochId, amount);
         claimedEpochIndex = vault.epochsLength();
         return amount;
     }
 
     function claimPayouts() external override returns (uint256) {
-        console.log("claimPayouts");
-
         uint256 amount = 0;
         uint256 len = vault.epochsLength();
-        // TODO: double check this logic, as it may not be 100% right.
+        // TODO: Double check this logic, as it may not be 100% right.
         // Does it correctly handle the current epoch?
         for (uint256 i = claimedEpochIndex; i < len; i++) {
-            console.log("--> claiming", i);
-            uint256 a = _claimPayoutForEpoch(vault.epochs(i));
-            console.log("--> ", a);
-            amount += a;
+            amount += _claimPayoutForEpoch(vault.epochs(i));
         }
-
-        console.log("The paymentToken is:", address(paymentToken));
 
         paymentToken.safeTransfer(beneficiary, amount);
         return amount;
