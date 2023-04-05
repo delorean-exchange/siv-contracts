@@ -80,10 +80,7 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
     }
 
     function epochDuration() external override view returns (uint256) {
-        // TODO: Confirm with Y2K team that epochs will be 1 week long
         uint256 id = _nextEpoch();
-        /* uint256 beginTS = vault.idEpochBegin(id); */
-        /* return 7 * 24 * 3600; */
         return id - vault.idEpochBegin(id);
     }
 
@@ -131,19 +128,28 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
     function _claimPayoutForEpoch(uint256 epochId) internal returns (uint256) {
         uint256 assets = vault.balanceOf(address(this), epochId);
         uint256 amount = vault.withdraw(epochId, assets, address(this), address(this));
+        console.log("claim for epoch gave:", epochId, assets);
+        console.log("claim for epoch gave:", epochId, amount);
         claimedEpochIndex = vault.epochsLength();
         return amount;
     }
 
     function claimPayouts() external override returns (uint256) {
+        console.log("claimPayouts");
+
         uint256 amount = 0;
         uint256 len = vault.epochsLength();
         // TODO: double check this logic, as it may not be 100% right.
         // Does it correctly handle the current epoch?
         for (uint256 i = claimedEpochIndex; i < len; i++) {
+            console.log("--> claiming", i);
             uint256 a = _claimPayoutForEpoch(vault.epochs(i));
+            console.log("--> ", a);
             amount += a;
         }
+
+        console.log("The paymentToken is:", address(paymentToken));
+
         paymentToken.safeTransfer(beneficiary, amount);
         return amount;
     }

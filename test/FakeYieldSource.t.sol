@@ -7,6 +7,7 @@ import { FakeToken } from "./helpers/FakeToken.sol";
 import { FakeYieldTracker } from "./helpers/FakeYieldTracker.sol";
 
 contract FakeYieldTrackerTest is BaseTest {
+
     function testYieldSource() public {
         FakeYieldTracker source = new FakeYieldTracker(200);
 

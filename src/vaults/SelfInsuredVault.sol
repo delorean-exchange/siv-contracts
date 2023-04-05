@@ -34,40 +34,52 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
                        uint256 amount);
 
     // NOTE: Epoch ID's are assumed to be synchronized across providers
+
+    // `UserEpochTracker` tracks shares and payouts on a per-use basis.
+    // It updates and accumulates each time the user's shares change, and
+    // tracks positions in three ways:
+    //
+    // (1) It tracks the start of the "next" epoch, and the user's balance
+    //     in this epoch. `nextEpochId` indicates the start of the "next"
+    //     epoch. In that epoch, and all subsequent epochs, the user has
+    //     `nextShares` number of shares.
+    // (2) It tracks the epoch range before the "next" epoch. These are
+    //     the epochs between [startEpochId, nextEpochId). In this range,
+    //     the user has `shares` number of shares.
+    // (3) It tracks previously accumulated payouts in the `accumulatedPayouts`
+    //     field. This is the amount of `paymentToken` that the user is
+    //     entitled to. This field is updated whenever the number of shares
+    //     changes, and it is set to the value of payouts in the range
+    //     [startEpochId, nextEpochId).
+    //
+    // The `claimedPayouts` field indicates what the user has already claimed.
     struct UserEpochTracker {
-        // The user has `shares` shares starting at `startEpochId`.
         uint256 startEpochId;
         uint256 shares;
-
-        // The user has `nextShares` shares starting at `nextEpochId`.
         uint256 nextEpochId;
         uint256 nextShares;
-
-        // The user has accumulated this many payouts from epochs
-        // *before* `startEpochId`
         uint256 accumulatedPayouts;
-
-        // The user has claimed this many payouts
         uint256 claimedPayouts;
     }
-    // User address -> tracker
     mapping(address => UserEpochTracker) public userEpochTrackers;
 
+    // `EpochInfo` tracks payouts on a per-provider-per-epoch basis. Combine with
+    // the data in `UserEpochTracker` to compute each user's payouts.
     struct EpochInfo {
         uint256 epochId;      // Timestamp of epoch start
         uint256 totalShares;  // Total shares during this epoch
         uint256 payout;       // Payout of this epoch, if any
         uint256 premiumPaid;  // If zero, insurance has not yet been purchased
     }
-    // Provider address -> epoch info
     mapping(address => EpochInfo[]) public providerEpochs;
 
-    // Yield from underlying
-    struct UserInfo {
+    // `UserYieldInfo` tracks each users yield from the underlying. Note that this
+    // is separate from insurance payouts.
+    struct UserYieldInfo {
         uint256 accumulatedYieldPerToken;
         uint256 accumulatedYield;
     }
-    mapping(address => UserInfo) public userInfos;
+    mapping(address => UserYieldInfo) public userYieldInfos;
 
     uint256 public constant PRECISION_FACTOR = 10**18;
     uint256 public constant WEIGHTS_PRECISION = 100_00;
@@ -263,7 +275,7 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
     }
 
     function _calculatePendingYield(address user) internal view returns (uint256) {
-        UserInfo storage info = userInfos[user];
+        UserYieldInfo storage info = userYieldInfos[user];
         uint256 ypt = _yieldPerToken();
         return ((this.balanceOf(user) * (ypt - info.accumulatedYieldPerToken))) / PRECISION_FACTOR
             + info.accumulatedYield;
@@ -280,18 +292,17 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
             lastUpdateCumulativeYield = _cumulativeYield();
         }
 
-        userInfos[user].accumulatedYield = _calculatePendingYield(user);
-        userInfos[user].accumulatedYieldPerToken = yieldPerTokenStored;
+        userYieldInfos[user].accumulatedYield = _calculatePendingYield(user);
+        userYieldInfos[user].accumulatedYieldPerToken = yieldPerTokenStored;
     }
 
     // Counts the depeg rewards for epochs between [startEpochId, nextEpochId)
-    function _computeAccumulateDepegRewards(address user) internal view returns (uint256, uint256)  {
+    function _computeAccumulatePayouts(address user) internal view returns (uint256)  {
         UserEpochTracker storage tracker = userEpochTrackers[user];
-        if (tracker.startEpochId == 0) return (0, 0);
-        if (tracker.shares == 0) return (0, 0);
+        if (tracker.startEpochId == 0) return 0;
+        if (tracker.shares == 0) return 0;
 
         uint256 deltaAccumulatedPayouts;
-        uint256 newStartEpochId;
 
         for (uint256 i = 0; i < providers.length; i++) {
             IInsuranceProvider provider = providers[i];
@@ -299,27 +310,19 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
             uint256 currentEpochId = provider.currentEpoch();
             EpochInfo[] storage infos = providerEpochs[address(provider)];
             // TODO: GAS: Use nextId field + mapping instead of list
+
+            console.log("LOOP!", infos.length);
+
             for (uint256 j = 0; j < infos.length; j++) {
                 EpochInfo storage info = infos[j];
                 if (info.epochId < tracker.startEpochId) continue;
                 if (info.epochId >= tracker.nextEpochId) break;
                 if (info.epochId == currentEpochId) break;
                 deltaAccumulatedPayouts += (tracker.shares * info.payout) / info.totalShares;
-
-                // Update on each iteration, `newStartEpochId` will take
-                // value from the last iteration of the loop.
-                newStartEpochId = info.epochId;
             }
         }
 
-        return (deltaAccumulatedPayouts, newStartEpochId);
-    }
-
-    function _accumulateDepegRewards(address user) internal {
-        UserEpochTracker storage tracker = userEpochTrackers[user];
-        (uint256 deltaAccumulatdPayouts, uint256 newStartEpochId) = _computeAccumulateDepegRewards(user);
-        tracker.accumulatedPayouts += deltaAccumulatdPayouts;
-        tracker.startEpochId = newStartEpochId;
+        return deltaAccumulatedPayouts;
     }
 
     function pprintEpochs() external {
@@ -367,20 +370,24 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
     function _updateUserEpochTracker(address user, int256 deltaShares) internal {
         if (providers.length == 0) return;
 
+        console.log("Running _updateUserEpochTracker", user, uint256(deltaShares));
+
         UserEpochTracker storage tracker = userEpochTrackers[user];
 
         // Assuming synchronized epoch ID's, this is asserted elsewhere
         uint256 nextEpochId = providers[0].nextEpoch();
 
+        console.log("Do we need to shift?", nextEpochId, tracker.nextEpochId);
+
         // See if we need to shift nextEpoch into start/end epoch segment
         if (nextEpochId != tracker.nextEpochId) {
-            _accumulateDepegRewards(user);
+            uint256 deltaAccumulatdPayouts = _computeAccumulatePayouts(user);
+
+            tracker.accumulatedPayouts += deltaAccumulatdPayouts;
 
             tracker.startEpochId = tracker.nextEpochId;
-            tracker.shares = tracker.nextShares;
-
             tracker.nextEpochId = nextEpochId;
-            tracker.nextShares = tracker.shares;
+            tracker.shares = tracker.nextShares;
         }
 
         // Update the shares starting with the next epoch
@@ -409,9 +416,9 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
         require(rewardTokens[0] == address(yieldSource.yieldToken()), "SIV: claim2");
 
         _updateYield(msg.sender);
-        require(owed[0] == userInfos[msg.sender].accumulatedYield, "SIV: claim3");
+        require(owed[0] == userYieldInfos[msg.sender].accumulatedYield, "SIV: claim3");
 
-        userInfos[msg.sender].accumulatedYield = 0;
+        userYieldInfos[msg.sender].accumulatedYield = 0;
 
         for (uint8 i = 0; i < uint8(owed.length); i++) {
             IERC20(rewardTokens[i]).safeTransfer(msg.sender, owed[i]);
@@ -421,7 +428,7 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
 
     // -- Payouts -- //
     function _pendingPayouts(address who) internal view returns (uint256) {
-        (uint256 deltaAccumulatdPayouts, ) = _computeAccumulateDepegRewards(who);
+        uint256 deltaAccumulatdPayouts = _computeAccumulatePayouts(who);
 
         // `deltaAccumulatdPayouts` includes [startEpochId, nextEpochId), but we
         // also want [nextEpochId, currentEpochId].
@@ -471,7 +478,11 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
     function setAdmin(address) external onlyAdmin {
     }
 
-    function setInsuranceProviders(IInsuranceProvider[] calldata providers_, uint256[] calldata weights_) external onlyAdmin {
+    function setInsuranceProviders(IInsuranceProvider[] calldata providers_,
+                                   uint256[] calldata weights_)
+        external
+        onlyAdmin {
+
         // TODO: changing this mid-epoch will cause problems, find a solution.
         // TODO: possible fix is to only allow adding new providers, and adjusting
         // the weights of previous ones to 0
@@ -481,8 +492,11 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
 
         uint256 sum;
         for (uint256 i = 0; i < providers_.length; i++) {
-            require(providers_[0].epochDuration() == providers_[i].epochDuration(), "SIV: same duration");
-            require(providers_[0].paymentToken() == paymentToken, "SIV: payment token");
+            require(providers_[0].epochDuration() == providers_[i].epochDuration(),
+                    "SIV: same duration");
+            require(providers_[0].paymentToken() == paymentToken,
+                    "SIV: payment token");
+
             sum += weights_[i];
         }
         require(sum < WEIGHTS_PRECISION, "SIV: max weight");
@@ -579,6 +593,7 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
         // Purchase insurance via Y2K
         for (uint256 i = 0; i < providers.length; i++) {
             uint256 amount = (actualOut * weights[i]) / WEIGHTS_PRECISION;
+            if (amount == 0) continue;
             _purchaseForNextEpoch(i, amount);
         }
     }

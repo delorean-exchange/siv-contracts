@@ -61,10 +61,6 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
 
     address glpWallet = 0x3aaF2aCA2a0A6b6ec227Bbc2bF5cEE86c2dC599d;
 
-    /* UniswapV3LiquidityPool public pool; */
-    /* IUniswapV3Pool public uniswapV3Pool; */
-    /* INonfungiblePositionManager public manager; */
-
     IRewardTracker public gmxRewardsTracker = IRewardTracker(0x4e971a87900b931fF39d1Aad67697F49835400b6);
 
     function epochPayout(SelfInsuredVault vault, address provider, uint256 index) internal view returns (uint256) {
@@ -75,7 +71,13 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
     function testYieldAccounting() public {
         vm.selectFork(vm.createFork(ARBITRUM_RPC_URL));
 
-        DLXFakeYieldSource source = new DLXFakeYieldSource(200);
+        uint256 wethAmount = 1000000e18;
+        vm.deal(address(this), wethAmount);
+        IWrappedETH(WETH).deposit{value: wethAmount}();
+        FakeYieldSource3 source = new FakeYieldSource3(200, WETH);
+        IERC20(WETH).transfer(address(source), wethAmount);
+
+        /* DLXFakeYieldSource source = new DLXFakeYieldSource(200); */
         FakeYieldOracle oracle = new FakeYieldOracle(address(source.generatorToken()),
                                                      address(source.yieldToken()),
                                                      200,
@@ -100,6 +102,10 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         source.mintGenerator(user0, 10e18);
 
         vm.startPrank(user0);
+
+        // Set balance to 0 WETH for user0
+        IERC20(WETH).transfer(address(source), IERC20(WETH).balanceOf(user0));
+
         IERC20(gt).approve(address(vault), 2e18);
         assertEq(vault.previewDeposit(2e18), 2e18);
         vault.deposit(2e18, user0);
@@ -172,6 +178,7 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
 
         // Add a second user
         address user1 = createTestUser(1);
+
         source.mintGenerator(user1, 20e18);
         assertEq(vault.calculatePendingYield(user0), 0);
         assertEq(vault.calculatePendingYield(user1), 0);
@@ -182,16 +189,16 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
 
         // Second user deposits
         vm.startPrank(user1);
+
+        // Set balance to 0 WETH for user1
+        IERC20(WETH).transfer(address(source), IERC20(WETH).balanceOf(user1));
+
         IERC20(gt).approve(address(vault), 4e18);
         assertEq(vault.previewDeposit(4e18), 4e18);
 
-        console.log("");
-        console.log("get before");
         before = vault.cumulativeYield();
 
         vault.deposit(4e18, user1);
-        console.log("");
-        console.log("get after");
         assertEq(vault.cumulativeYield(), before);
         assertEq(IERC20(gt).balanceOf(user0), 8e18);
         assertEq(IERC20(gt).balanceOf(user1), 16e18);
@@ -227,6 +234,10 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         address user2 = createTestUser(2);
         source.mintGenerator(user2, 20e18);
         vm.startPrank(user2);
+
+        // Set balance to 0 WETH for user2
+        IERC20(WETH).transfer(address(source), IERC20(WETH).balanceOf(user2));
+
         gt.approve(address(vault), 8e18);
         assertEq(vault.previewDeposit(8e18), 8e18);
         before = vault.cumulativeYield();
@@ -297,24 +308,23 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
     function testDepegYieldAccounting() public {
         depositDepeg();
 
-        FakeYieldTracker tracker = new FakeYieldTracker(200);
-        FakeYieldOracle oracle = new FakeYieldOracle(address(tracker.generatorToken()),
-                                                     address(tracker.yieldToken()),
+        FakeYieldSource3 source = new FakeYieldSource3(200, WETH);
+        FakeYieldOracle oracle = new FakeYieldOracle(address(source.generatorToken()),
+                                                     address(source.yieldToken()),
                                                      200,
                                                      18);
 
-        IERC20 gt = IERC20(tracker.generatorToken());
-        IERC20 yt = IERC20(tracker.yieldToken());
-        vm.prank(ADMIN);
+        IERC20 gt = IERC20(source.generatorToken());
+        IERC20 yt = IERC20(source.yieldToken());
+        vm.startPrank(ADMIN);
         SelfInsuredVault vault = new SelfInsuredVault("Self Insured YS:G Vault",
                                                       "siYS:G",
-                                                      address(tracker.yieldToken()),
-                                                      address(tracker),
+                                                      address(source.yieldToken()),
+                                                      address(source),
                                                       address(oracle),
                                                       address(0));
 
         // Set up Y2K insurance vault
-        vm.prank(ADMIN);
         vaultFactory.createNewMarket(FEE, TOKEN_FRAX, DEPEG_AAA, beginEpoch, endEpoch, ORACLE_FRAX, "y2kFRAX_99*");
 
         hedge = vaultFactory.getVaults(1)[0];
@@ -324,8 +334,8 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         vRisk = Vault(risk);
 
         // Set up the insurance provider
-        Y2KEarthquakeV1InsuranceProvider provider = new Y2KEarthquakeV1InsuranceProvider(address(vHedge),
-                                                                                         address(vault));
+        Y2KEarthquakeV1InsuranceProvider provider;
+        provider = new Y2KEarthquakeV1InsuranceProvider(address(vHedge), address(vault));
 
         // Set the insurance provider at 10% of expected yield
         IInsuranceProvider[] memory providers = new IInsuranceProvider[](1);
@@ -333,16 +343,17 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         uint256[] memory weights = new uint256[](1);
         weights[0] = 10_00;
 
-        vm.prank(ADMIN);
         vault.setInsuranceProviders(providers, weights);
+        vm.stopPrank();  // ADMIN
 
         // Alice deposits into self insured vault
-        tracker.mintGenerator(ALICE, 10e18);
+        source.mintGenerator(ALICE, 10e18);
 
         vm.startPrank(ALICE);
         gt.approve(address(vault), 2e18);
         assertEq(vault.previewDeposit(2e18), 2e18);
         vault.deposit(2e18, ALICE);
+
         {
             (uint256 epochId, uint256 totalShares, , ) = vault.providerEpochs(address(provider), 0);
             assertEq(totalShares, 2e18);
@@ -380,6 +391,7 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
             assertEq(accumulatedPayouts, 0);
             assertEq(claimedPayouts, 0);
         }
+
         vm.stopPrank();
 
         // Move ahead to next epoch, end it
@@ -405,6 +417,11 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         // Alice deposits more shares
         vm.startPrank(ALICE);
         gt.approve(address(vault), 3e18);
+
+        console.log("");
+        console.log("==> Make another deposit");
+        console.log("");
+
         vault.deposit(3e18, ALICE);
         vm.stopPrank();
 
@@ -433,40 +450,7 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
             assertEq(claimedPayouts, 0);
         }
 
-        // Code below obseleted by refactor
-
-        /* (uint256 shares1, ) = vault.userEpochs(ALICE, epoch1); */
-        /* assertEq(totalShares1, 2e18); */
-        /* assertEq(shares1, 2e18); */
-        /* gt.approve(address(vault), 1e18); */
-        /* vault.deposit(1e18, ALICE); */
-        /* (, uint256 totalShares2, , ) = vault.providerEpochs(address(provider), 0); */
-        /* (uint256 shares2, ) = vault.userEpochs(ALICE, epoch1); */
-        /* assertEq(totalShares2, 3e18); */
-        /* assertEq(shares2, 3e18); */
-        /* vm.stopPrank(); */
-
-        /* console.log("Yield token", address(tracker.yieldToken())); */
-        /* console.log("ADMIN WETH", IERC20(WETH).balanceOf(ADMIN)); */
-        /* tracker.mintYield(address(vault), 10000e18); */
-
-        /* // TODO: Use DLX to get future WETH yield */
-        /* vm.deal(address(vault), 200 ether); */
-        /* vm.prank(address(vault)); */
-        /* IWrappedETH(address(weth)).deposit{value: 100 ether}(); */
-
-        /* vm.prank(ADMIN); */
-        /* vault.purchaseForNextEpoch(); */
-
-        /* return; */
-
-        /* vm.warp(beginEpoch + 10 days); */
-        /* controller.triggerDepeg(SINGLE_MARKET_INDEX, endEpoch); */
-        /* uint256 pending = provider.pendingPayouts(); */
-        /* console.log("pending", pending); */
-        /* uint256 before = IERC20(weth).balanceOf(user0); */
-        /* uint256 result = provider.claimPayouts(); */
-        /* uint256 delta = IERC20(weth).balanceOf(user0) - before; */
+        // TODO: finish this test, or delete it as it is covered by the one below
     }
 
     function testPurchaseWithDLXFutureYield() public {
@@ -486,7 +470,6 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         yieldToken = IERC20(vaultSource.yieldToken());
         vaultSource.mintBoth(ALICE, 10e18);
 
-        /* depositDepeg(); */
         vm.startPrank(ADMIN);
         fakeOracle = new FakeOracle(ORACLE_FRAX, STRIKE_PRICE_FAKE_ORACLE);
         vaultFactory.createNewMarket(FEE, TOKEN_FRAX, DEPEG_AAA, beginEpoch, endEpoch, address(fakeOracle), "y2kFRAX_99*");
@@ -502,13 +485,7 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         YieldData dataCredit = new YieldData(20);
         Discounter discounter = new Discounter(1e13, 500, 360, 18);
 
-        /* vm.deal(address(this), wethAmount); */
-        /* IWrappedETH(WETH).deposit{value: wethAmount}(); */
-        /* FakeYieldSource3 dlxSource = new FakeYieldSource3(200, WETH); */
-        /* IERC20(WETH).transfer(address(dlxSource), wethAmount); */
-        // TODO: separate sources with same addresses...
         FakeYieldSource3 dlxSource = vaultSource;
-
         slice = new YieldSlice("npvETH-FAKE",
                                address(dlxSource),
                                address(dataDebt),
@@ -566,7 +543,7 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         manager.mint(params);
         assertTrue(uniswapV3Pool.liquidity() > 0);
         vm.stopPrank();
-        console.log("Delorean setup complete");
+
         // -- Delorean setup complete -- //
 
         vm.startPrank(ADMIN);
@@ -614,7 +591,6 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         assertEq(epochPayout(vault, address(provider), 0), 0);
         controller.triggerDepeg(SINGLE_MARKET_INDEX, endEpoch);
 
-        /* assertEq(IERC20(WETH).balanceOf(address(vault)), 0); */
         vault.claimInsurancePayouts();
 
         assertTrue(IERC20(WETH).balanceOf(address(vault)) > 199e18);

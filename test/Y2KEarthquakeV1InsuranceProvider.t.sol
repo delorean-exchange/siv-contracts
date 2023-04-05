@@ -73,7 +73,7 @@ contract Y2KEarthquakeV1InsuranceProviderTest is BaseTest, ControllerHelper {
         address user0 = createTestUser(0);
         vm.startPrank(user0);
 
-        provider = new Y2KEarthquakeV1InsuranceProvider(address(vHedge), address(this));
+        provider = new Y2KEarthquakeV1InsuranceProvider(address(vHedge), user0);
 
         IERC20(weth).approve(address(provider), 10 ether);
         assertEq(provider.nextEpochPurchased(), 0);
@@ -93,6 +93,8 @@ contract Y2KEarthquakeV1InsuranceProviderTest is BaseTest, ControllerHelper {
         uint256 before = IERC20(weth).balanceOf(user0);
         uint256 result = provider.claimPayouts();
         uint256 delta = IERC20(weth).balanceOf(user0) - before;
+
+        console.log("Weth is:", address(weth));
 
         assertEq(result, pending, "result == pending");
         assertEq(delta, result, "delta == result");
