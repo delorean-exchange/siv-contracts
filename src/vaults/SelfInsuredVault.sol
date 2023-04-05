@@ -82,7 +82,10 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
     mapping(address => UserYieldInfo) public userYieldInfos;
 
     uint256 public constant PRECISION_FACTOR = 10**18;
+
     uint256 public constant WEIGHTS_PRECISION = 100_00;
+    uint256 public constant MAX_COMBINED_WEIGHT = 20_00;
+    uint256 public constant MAX_PROVIDERS = 10;
 
     address public admin;
     IInsuranceProvider[] public providers;
@@ -309,10 +312,8 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
             uint256 nextEpochId = provider.nextEpoch();
             uint256 currentEpochId = provider.currentEpoch();
             EpochInfo[] storage infos = providerEpochs[address(provider)];
+
             // TODO: GAS: Use nextId field + mapping instead of list
-
-            console.log("LOOP!", infos.length);
-
             for (uint256 j = 0; j < infos.length; j++) {
                 EpochInfo storage info = infos[j];
                 if (info.epochId < tracker.startEpochId) continue;
@@ -370,14 +371,10 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
     function _updateUserEpochTracker(address user, int256 deltaShares) internal {
         if (providers.length == 0) return;
 
-        console.log("Running _updateUserEpochTracker", user, uint256(deltaShares));
-
         UserEpochTracker storage tracker = userEpochTrackers[user];
 
         // Assuming synchronized epoch ID's, this is asserted elsewhere
         uint256 nextEpochId = providers[0].nextEpoch();
-
-        console.log("Do we need to shift?", nextEpochId, tracker.nextEpochId);
 
         // See if we need to shift nextEpoch into start/end epoch segment
         if (nextEpochId != tracker.nextEpochId) {
@@ -439,6 +436,7 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
             uint256 currentEpochId = provider.currentEpoch();
 
             EpochInfo[] storage infos = providerEpochs[address(provider)];
+
             // TODO: GAS: Use nextId field + mapping instead of list
             for (uint256 j = 0; j < infos.length; j++) {
                 EpochInfo storage info = infos[j];
@@ -451,8 +449,6 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
                 if (info.epochId == currentEpochId) break;
             }
         }
-
-        console.log("accumulatedPayouts", accumulatedPayouts);
 
         return (userEpochTrackers[who].accumulatedPayouts +
                 accumulatedPayouts +
@@ -478,31 +474,34 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
     function setAdmin(address) external onlyAdmin {
     }
 
-    function setInsuranceProviders(IInsuranceProvider[] calldata providers_,
-                                   uint256[] calldata weights_)
-        external
-        onlyAdmin {
+    function addInsuranceProvider(IInsuranceProvider provider_, uint256 weight_) external onlyAdmin {
+        require(providers.length == 0 ||
+                provider_.epochDuration() == providers[0].epochDuration(), "SIV: same duration");
+        require(provider_.paymentToken() == paymentToken, "SIV: payment token");
+        require(providers.length < MAX_PROVIDERS, "SIV: max providers");
 
-        // TODO: changing this mid-epoch will cause problems, find a solution.
-        // TODO: possible fix is to only allow adding new providers, and adjusting
-        // the weights of previous ones to 0
-
-        require(providers_.length > 0, "SIV: empty providers");
-        require(providers_.length == weights_.length, "SIV: same length");
-
-        uint256 sum;
-        for (uint256 i = 0; i < providers_.length; i++) {
-            require(providers_[0].epochDuration() == providers_[i].epochDuration(),
-                    "SIV: same duration");
-            require(providers_[0].paymentToken() == paymentToken,
-                    "SIV: payment token");
-
-            sum += weights_[i];
+        uint256 sum = weight_;
+        for (uint256 i = 0; i < weights.length; i++) {
+            sum += weights[i];
         }
-        require(sum < WEIGHTS_PRECISION, "SIV: max weight");
 
-        providers = providers_;
-        weights = weights_;
+        require(sum < MAX_COMBINED_WEIGHT, "SIV: max weight");
+
+        providers.push(provider_);
+        weights.push(weight_);
+    }
+
+    function setWeight(uint256 index, uint256 weight_) external onlyAdmin {
+        require(index < providers.length, "SIV: invalid index");
+        uint256 sum = weight_;
+        for (uint256 i = 0; i < weights.length; i++) {
+            if (i == index) continue;
+            sum += weights[i];
+        }
+
+        require(sum < MAX_COMBINED_WEIGHT, "SIV: max weight");
+
+        weights[index] = weight_;
     }
 
     function _projectEpochYield() internal returns (uint256) {
@@ -569,15 +568,18 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
             sum += (projectedYield * weights[i]) / WEIGHTS_PRECISION;
         }
         uint256 minOut = (sum * minBps) / 100_00;
+
+        // Lock half generating tokens, leave other half for withdrawals until position
+        // unlocks. If more than half those tokens are reqeusted to withdraw, they must
+        // wait until the position repays itself, a function of the sum of weights,
+        // yield rate, and epoch duration. If 10% of yield is devoted to insurance
+        // purchase for 1 week epochs, it should take around 20% * 7 days = 1.4 days.
         uint256 amountLock = yieldSource.amountGenerator() / 2;
         yieldSource.withdraw(amountLock, false, address(this));
         yieldSource.generatorToken().approve(address(dlxSwap), amountLock);
 
-        /* console.log("GT before 1:", yieldSource.amountGenerator()); */
-        /* console.log("GT before 2:", yieldSource.generatorToken().balanceOf(address(this))); */
-
         _unlockIfNeeded();
-
+        require(dlxId == 0, "SIV: active delorean position");
         (uint256 id,
          uint256 actualOut) = dlxSwap.lockForYield(address(this),
                                                    amountLock,
@@ -586,9 +588,6 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
                                                    0,
                                                    new bytes(0));
         dlxId = id;
-
-        /* console.log("GT after 1: ", yieldSource.amountGenerator()); */
-        /* console.log("GT after 2: ", yieldSource.generatorToken().balanceOf(address(this))); */
 
         // Purchase insurance via Y2K
         for (uint256 i = 0; i < providers.length; i++) {

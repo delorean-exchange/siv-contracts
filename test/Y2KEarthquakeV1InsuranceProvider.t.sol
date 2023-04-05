@@ -120,13 +120,16 @@ contract Y2KEarthquakeV1InsuranceProviderTest is BaseTest, ControllerHelper {
 
         //ALICE hedge deposit
         vm.startPrank(ALICE);
+
         ERC20(WETH).approve(hedge, AMOUNT);
+
         vHedge.depositETH{value: AMOUNT}(endEpoch, ALICE);
         vm.stopPrank();
 
         //BOB hedge deposit
         vm.startPrank(BOB);
         ERC20(WETH).approve(hedge, AMOUNT * BOB_MULTIPLIER);
+
         vHedge.depositETH{value: AMOUNT * BOB_MULTIPLIER}(endEpoch, BOB);
 
         assertTrue(vHedge.balanceOf(BOB,endEpoch) == AMOUNT * BOB_MULTIPLIER);

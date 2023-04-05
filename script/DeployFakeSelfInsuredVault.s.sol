@@ -87,7 +87,7 @@ contract DeployFakeSelfInsuredVaultScript is BaseScript {
         vHedge = Vault(hedge);
         vRisk = Vault(risk);
 
-        vault = new SelfInsuredVault("Self Insured fakeGLP Vault",
+        vault = new SelfInsuredVault("Self Insure2d fakeGLP Vault",
                                      "sivFakeGLP",
                                      address(vaultSource.yieldToken()),
                                      address(vaultSource),
@@ -97,11 +97,7 @@ contract DeployFakeSelfInsuredVaultScript is BaseScript {
         provider = new Y2KEarthquakeV1InsuranceProvider(address(vHedge), address(vault));
 
         // Set the provider
-        IInsuranceProvider[] memory providers = new IInsuranceProvider[](1);
-        providers[0] = IInsuranceProvider(provider);
-        uint256[] memory weights = new uint256[](1);
-        weights[0] = 10_00;
-        vault.setInsuranceProviders(providers, weights);
+        vault.addInsuranceProvider(IInsuranceProvider(provider), 10_00);
 
         vm.stopBroadcast();
 

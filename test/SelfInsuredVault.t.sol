@@ -338,12 +338,7 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         provider = new Y2KEarthquakeV1InsuranceProvider(address(vHedge), address(vault));
 
         // Set the insurance provider at 10% of expected yield
-        IInsuranceProvider[] memory providers = new IInsuranceProvider[](1);
-        providers[0] = IInsuranceProvider(provider);
-        uint256[] memory weights = new uint256[](1);
-        weights[0] = 10_00;
-
-        vault.setInsuranceProviders(providers, weights);
+        vault.addInsuranceProvider(IInsuranceProvider(provider), 10_00);
         vm.stopPrank();  // ADMIN
 
         // Alice deposits into self insured vault
@@ -568,13 +563,9 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         vm.stopPrank();
 
         // Set the insurance provider at 10% of expected yield
-        IInsuranceProvider[] memory providers = new IInsuranceProvider[](1);
-        providers[0] = IInsuranceProvider(provider);
-        uint256[] memory weights = new uint256[](1);
-        weights[0] = 10_00;
-
         vm.startPrank(ADMIN);
-        vault.setInsuranceProviders(providers, weights);
+        vault.addInsuranceProvider(IInsuranceProvider(provider), 0);
+        vault.setWeight(0, 10_00);
         vm.stopPrank();
 
         // Deposit into the vault
@@ -616,7 +607,7 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
 
         {
             uint256 before = IERC20(WETH).balanceOf(ALICE);
-            vm.prank(ALICE);        
+            vm.prank(ALICE);
             vault.claimPayouts();
             assertEq(IERC20(WETH).balanceOf(ALICE) - before, 199000000000024154370);
         }
