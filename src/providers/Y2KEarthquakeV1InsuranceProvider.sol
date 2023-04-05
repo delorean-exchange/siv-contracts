@@ -39,12 +39,11 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
     function _currentEpoch() internal view returns (uint256) {
         if (vault.epochsLength() == 0) return 0;
 
-        // TOOD: GASS: probably don't need a loop here
+        // TOOD: GAS: probably don't need a loop here
         int256 len = int256(vault.epochsLength());
         for (int256 i = len - 1; i >= 0 && i > len - 2; i--) {
             uint256 epochId = vault.epochs(uint256(i));
-            // TODO: if current epoch is manually ended, should still return it's id
-            // vault.idEpochEnded(epochId) --> 
+            // TODO: verify taht if current epoch is manually ended, this will still work
             if (block.timestamp > vault.idEpochBegin(epochId) && !vault.idEpochEnded(epochId)) {
                 return epochId;
             }
