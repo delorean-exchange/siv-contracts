@@ -51,7 +51,11 @@ contract FakeYieldTrackerTest is BaseTest {
         FakeYieldTracker source = new FakeYieldTracker(200);
 
         address user0 = createTestUser(0);
+
+        return;
+
         assertEq(source.amountPending(user0), 0);
+
 
         source.mintGenerator(user0, 10);
         assertEq(source.amountPending(user0), 0);

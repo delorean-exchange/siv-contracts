@@ -73,6 +73,21 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
     }
     mapping(address => EpochInfo[]) public providerEpochs;
 
+
+    // -- Yield & rewards accounting -- //
+    uint256 public yieldPerTokenStored;
+    uint256 public lastUpdateBlock;
+    uint256 public lastUpdateCumulativeYield;
+    uint256 public harvestedYield;
+
+    struct GlobalYieldInfo {
+        uint256 yieldPerTokenStored;
+        uint256 lastUpdateBlock;
+        uint256 lastUpdateCumulativeYield;
+        uint256 harvestedYield;
+    }
+    mapping(address => GlobalYieldInfo) public globalYieldInfos;
+
     // `UserYieldInfo` tracks each users yield from the underlying. Note that this
     // is separate from insurance payouts.
     struct UserYieldInfo {
@@ -100,12 +115,6 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
     IYieldSource public immutable yieldSource;
     IYieldOracle public oracle;
     NPVSwap public dlxSwap;
-
-    // Rewards accounting
-    uint256 public yieldPerTokenStored;
-    uint256 public lastUpdateBlock;
-    uint256 public lastUpdateCumulativeYield;
-    uint256 public harvestedYield;
 
     modifier onlyAdmin {
         require(msg.sender == admin, "SIV: only admin");
@@ -184,7 +193,7 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
         // TODO: I don't think we actually need this min
         require(assets >= PRECISION_FACTOR, "SIV: min deposit");
 
-        _updateYield(receiver);
+        _updateYield(receiver, address(yieldSource.yieldToken()));
         _updateProviderEpochs(int256(assets));
         _updateUserEpochTracker(receiver, int256(assets));
 
@@ -218,7 +227,7 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
 
         _unlockIfNeeded();
 
-        _updateYield(owner);
+        _updateYield(owner, address(yieldSource.yieldToken()));
         _updateProviderEpochs(-int256(assets));
         _updateUserEpochTracker(owner, -int256(assets));
         yieldSource.withdraw(assets, false, receiver);
@@ -261,25 +270,30 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
         harvestedYield += pending;
     }
 
+    /* function cumulativeYield(address yieldToken) external view returns (uint256) { */
     function cumulativeYield() external view returns (uint256) {
-        return _cumulativeYield();
+        return _cumulativeYield(address(yieldSource.yieldToken()));
     }
 
-    function _cumulativeYield() private view returns (uint256) {
-        return harvestedYield + yieldSource.amountPending();
+    function _cumulativeYield(address yieldToken) private view returns (uint256) {
+        if (yieldToken == address(yieldSource.yieldToken())) {
+            return harvestedYield + yieldSource.amountPending();
+        } else {
+            return 0;
+        }
     }
 
-    function _yieldPerToken() internal view returns (uint256) {
+    function _yieldPerToken(address yieldToken) internal view returns (uint256) {
         if (this.totalAssets() == 0) return yieldPerTokenStored;
         if (block.number == lastUpdateBlock) return yieldPerTokenStored;
         
-        uint256 deltaYield = _cumulativeYield() - lastUpdateCumulativeYield;
+        uint256 deltaYield = _cumulativeYield(yieldToken) - lastUpdateCumulativeYield;
         return yieldPerTokenStored + (deltaYield * PRECISION_FACTOR) / this.totalAssets();
     }
 
     function _calculatePendingYield(address user) internal view returns (uint256) {
         UserYieldInfo storage info = userYieldInfos[user];
-        uint256 ypt = _yieldPerToken();
+        uint256 ypt = _yieldPerToken(address(yieldSource.yieldToken()));
         return ((this.balanceOf(user) * (ypt - info.accumulatedYieldPerToken))) / PRECISION_FACTOR
             + info.accumulatedYield;
     }
@@ -288,11 +302,11 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
         return _calculatePendingYield(user);
     }
 
-    function _updateYield(address user) internal {
+    function _updateYield(address user, address yieldToken) internal {
         if (block.number != lastUpdateBlock) {
-            yieldPerTokenStored = _yieldPerToken();
+            yieldPerTokenStored = _yieldPerToken(yieldToken);
             lastUpdateBlock = block.number;
-            lastUpdateCumulativeYield = _cumulativeYield();
+            lastUpdateCumulativeYield = _cumulativeYield(yieldToken);
         }
 
         userYieldInfos[user].accumulatedYield = _calculatePendingYield(user);
@@ -412,7 +426,7 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
         require(owed.length == rewardTokens.length, "SIV: claim1");
         require(rewardTokens[0] == address(yieldSource.yieldToken()), "SIV: claim2");
 
-        _updateYield(msg.sender);
+        _updateYield(msg.sender, address(yieldSource.yieldToken()));
         require(owed[0] == userYieldInfos[msg.sender].accumulatedYield, "SIV: claim3");
 
         userYieldInfos[msg.sender].accumulatedYield = 0;
