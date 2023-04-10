@@ -89,7 +89,7 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
         uint256 accumulatedYieldPerToken;
         uint256 accumulatedYield;
     }
-    mapping(address => UserYieldInfo) public userYieldInfos;
+    mapping(address => mapping(address => UserYieldInfo)) public userYieldInfos;
 
     uint256 public constant PRECISION_FACTOR = 10**18;
 
@@ -294,7 +294,7 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
     }
 
     function _calculatePendingYield(address user, address yieldToken) internal view returns (uint256) {
-        UserYieldInfo storage info = userYieldInfos[user];
+        UserYieldInfo storage info = userYieldInfos[user][yieldToken];
         uint256 ypt = _yieldPerToken(yieldToken);
         return ((this.balanceOf(user) * (ypt - info.accumulatedYieldPerToken)))
             / PRECISION_FACTOR
@@ -313,8 +313,10 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
             gyInfo.lastUpdateCumulativeYield = _cumulativeYield(yieldToken);
         }
 
-        userYieldInfos[user].accumulatedYield = _calculatePendingYield(user, yieldToken);
-        userYieldInfos[user].accumulatedYieldPerToken = gyInfo.yieldPerTokenStored;
+        userYieldInfos[user][yieldToken].accumulatedYield =
+            _calculatePendingYield(user, yieldToken);
+        userYieldInfos[user][yieldToken].accumulatedYieldPerToken =
+            gyInfo.yieldPerTokenStored;
     }
 
     // Counts the depeg rewards for epochs between [startEpochId, nextEpochId)
@@ -430,10 +432,11 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
         require(owed.length == rewardTokens.length, "SIV: claim1");
         require(rewardTokens[0] == address(yieldSource.yieldToken()), "SIV: claim2");
 
-        _updateYield(msg.sender, address(yieldSource.yieldToken()));
-        require(owed[0] == userYieldInfos[msg.sender].accumulatedYield, "SIV: claim3");
+        address yt = address(yieldSource.yieldToken());
+        _updateYield(msg.sender, yt);
+        require(owed[0] == userYieldInfos[msg.sender][yt].accumulatedYield, "SIV: claim3");
 
-        userYieldInfos[msg.sender].accumulatedYield = 0;
+        userYieldInfos[msg.sender][yt].accumulatedYield = 0;
 
         for (uint8 i = 0; i < uint8(owed.length); i++) {
             IERC20(rewardTokens[i]).safeTransfer(msg.sender, owed[i]);
