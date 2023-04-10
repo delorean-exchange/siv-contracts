@@ -33,6 +33,8 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
     event ClaimPayouts(address indexed user,
                        uint256 amount);
 
+    // -- Insurance payouts tracking -- //
+
     // NOTE: Epoch ID's are assumed to be synchronized across providers
 
     // `UserEpochTracker` tracks shares and payouts on a per-use basis.
@@ -91,8 +93,8 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
     }
     mapping(address => mapping(address => UserYieldInfo)) public userYieldInfos;
 
+    // -- Constants, other global state -- //
     uint256 public constant PRECISION_FACTOR = 10**18;
-
     uint256 public constant WEIGHTS_PRECISION = 100_00;
     uint256 public constant MAX_COMBINED_WEIGHT = 20_00;
     uint256 public constant MAX_PROVIDERS = 10;
@@ -415,8 +417,10 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
 
     // -- Rewards -- //
     function _previewClaimRewards(address who) internal returns (uint256[] memory) {
-        uint256[] memory result = new uint256[](1);
-        result[0] = _calculatePendingYield(who, address(yieldSource.yieldToken()));
+        uint256[] memory result = new uint256[](rewardTokens.length);
+        for (uint256 i = 0; i < result.length; i++) {
+            result[i] = _calculatePendingYield(who, rewardTokens[i]);
+        }
         return result;
     }
 
@@ -429,18 +433,16 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
 
         uint256[] memory owed = _previewClaimRewards(msg.sender);
 
-        require(owed.length == rewardTokens.length, "SIV: claim1");
-        require(rewardTokens[0] == address(yieldSource.yieldToken()), "SIV: claim2");
-
-        address yt = address(yieldSource.yieldToken());
-        _updateYield(msg.sender, yt);
-        require(owed[0] == userYieldInfos[msg.sender][yt].accumulatedYield, "SIV: claim3");
-
-        userYieldInfos[msg.sender][yt].accumulatedYield = 0;
+        require(owed.length == rewardTokens.length, "SIV: claim length");
 
         for (uint8 i = 0; i < uint8(owed.length); i++) {
+            address t = address(rewardTokens[i]);
+            _updateYield(msg.sender, t);
+            require(owed[i] == userYieldInfos[msg.sender][t].accumulatedYield, "SIV: claim acc");
+            userYieldInfos[msg.sender][t].accumulatedYield = 0;
             IERC20(rewardTokens[i]).safeTransfer(msg.sender, owed[i]);
         }
+
         return owed;
     }
 
@@ -492,7 +494,14 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
     }
 
     // -- Admin only -- //
-    function setAdmin(address) external onlyAdmin {
+    function setAdmin(address admin_) external onlyAdmin {
+        require(admin != address(0), "SIV: zero admin");
+        admin = admin_;
+    }
+
+    function addRewardToken(address rewardToken) external onlyAdmin {
+        require(rewardToken != address(0), "SIV: zero reward token");
+        rewardTokens.push(rewardToken);
     }
 
     function addInsuranceProvider(IInsuranceProvider provider_, uint256 weight_) external onlyAdmin {
