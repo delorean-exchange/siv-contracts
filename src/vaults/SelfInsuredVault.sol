@@ -75,11 +75,6 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
 
 
     // -- Yield & rewards accounting -- //
-    uint256 public yieldPerTokenStored;
-    uint256 public lastUpdateBlock;
-    uint256 public lastUpdateCumulativeYield;
-    uint256 public harvestedYield;
-
     struct GlobalYieldInfo {
         uint256 yieldPerTokenStored;
         uint256 lastUpdateBlock;
@@ -267,7 +262,7 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
     function _harvest() internal {
         uint256 pending = yieldSource.amountPending();
         yieldSource.harvest();
-        harvestedYield += pending;
+        globalYieldInfos[address(yieldSource.yieldToken())].harvestedYield += pending;
     }
 
     /* function cumulativeYield(address yieldToken) external view returns (uint256) { */
@@ -277,18 +272,25 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
 
     function _cumulativeYield(address yieldToken) private view returns (uint256) {
         if (yieldToken == address(yieldSource.yieldToken())) {
-            return harvestedYield + yieldSource.amountPending();
+            return globalYieldInfos[yieldToken].harvestedYield + yieldSource.amountPending();
         } else {
             return 0;
         }
     }
 
     function _yieldPerToken(address yieldToken) internal view returns (uint256) {
-        if (this.totalAssets() == 0) return yieldPerTokenStored;
-        if (block.number == lastUpdateBlock) return yieldPerTokenStored;
+        GlobalYieldInfo storage gyInfo = globalYieldInfos[yieldToken];
+        if (this.totalAssets() == 0) {
+            return gyInfo.yieldPerTokenStored;
+        }
+        if (block.number == gyInfo.lastUpdateBlock) {
+            return gyInfo.yieldPerTokenStored;
+        }
         
-        uint256 deltaYield = _cumulativeYield(yieldToken) - lastUpdateCumulativeYield;
-        return yieldPerTokenStored + (deltaYield * PRECISION_FACTOR) / this.totalAssets();
+        uint256 deltaYield = (_cumulativeYield(yieldToken) -
+                              gyInfo.lastUpdateCumulativeYield);
+        return (gyInfo.yieldPerTokenStored +
+                (deltaYield * PRECISION_FACTOR) / this.totalAssets());
     }
 
     function _calculatePendingYield(address user, address yieldToken) internal view returns (uint256) {
@@ -304,14 +306,15 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
     }
 
     function _updateYield(address user, address yieldToken) internal {
-        if (block.number != lastUpdateBlock) {
-            yieldPerTokenStored = _yieldPerToken(yieldToken);
-            lastUpdateBlock = block.number;
-            lastUpdateCumulativeYield = _cumulativeYield(yieldToken);
+        GlobalYieldInfo storage gyInfo = globalYieldInfos[yieldToken];
+        if (block.number != gyInfo.lastUpdateBlock) {
+            gyInfo.yieldPerTokenStored = _yieldPerToken(yieldToken);
+            gyInfo.lastUpdateBlock = block.number;
+            gyInfo.lastUpdateCumulativeYield = _cumulativeYield(yieldToken);
         }
 
         userYieldInfos[user].accumulatedYield = _calculatePendingYield(user, yieldToken);
-        userYieldInfos[user].accumulatedYieldPerToken = yieldPerTokenStored;
+        userYieldInfos[user].accumulatedYieldPerToken = gyInfo.yieldPerTokenStored;
     }
 
     // Counts the depeg rewards for epochs between [startEpochId, nextEpochId)
