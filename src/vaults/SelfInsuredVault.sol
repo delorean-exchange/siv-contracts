@@ -291,15 +291,16 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
         return yieldPerTokenStored + (deltaYield * PRECISION_FACTOR) / this.totalAssets();
     }
 
-    function _calculatePendingYield(address user) internal view returns (uint256) {
+    function _calculatePendingYield(address user, address yieldToken) internal view returns (uint256) {
         UserYieldInfo storage info = userYieldInfos[user];
-        uint256 ypt = _yieldPerToken(address(yieldSource.yieldToken()));
-        return ((this.balanceOf(user) * (ypt - info.accumulatedYieldPerToken))) / PRECISION_FACTOR
+        uint256 ypt = _yieldPerToken(yieldToken);
+        return ((this.balanceOf(user) * (ypt - info.accumulatedYieldPerToken)))
+            / PRECISION_FACTOR
             + info.accumulatedYield;
     }
 
     function calculatePendingYield(address user) external view returns (uint256) {
-        return _calculatePendingYield(user);
+        return _calculatePendingYield(user, address(yieldSource.yieldToken()));
     }
 
     function _updateYield(address user, address yieldToken) internal {
@@ -309,7 +310,7 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
             lastUpdateCumulativeYield = _cumulativeYield(yieldToken);
         }
 
-        userYieldInfos[user].accumulatedYield = _calculatePendingYield(user);
+        userYieldInfos[user].accumulatedYield = _calculatePendingYield(user, yieldToken);
         userYieldInfos[user].accumulatedYieldPerToken = yieldPerTokenStored;
     }
 
@@ -410,7 +411,7 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
     // -- Rewards -- //
     function _previewClaimRewards(address who) internal returns (uint256[] memory) {
         uint256[] memory result = new uint256[](1);
-        result[0] = _calculatePendingYield(who);
+        result[0] = _calculatePendingYield(who, address(yieldSource.yieldToken()));
         return result;
     }
 
