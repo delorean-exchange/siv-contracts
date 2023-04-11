@@ -82,6 +82,7 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
         uint256 lastUpdateBlock;
         uint256 lastUpdateCumulativeYield;
         uint256 harvestedYield;
+        uint256 claimedYield;
     }
     mapping(address => GlobalYieldInfo) public globalYieldInfos;
 
@@ -190,7 +191,10 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
         // TODO: I don't think we actually need this min
         require(assets >= PRECISION_FACTOR, "SIV: min deposit");
 
-        _updateYield(receiver, address(yieldSource.yieldToken()));
+        for (uint8 i = 0; i < uint8(rewardTokens.length); i++) {
+            address t = address(rewardTokens[i]);
+            _updateYield(receiver, t);
+        }
         _updateProviderEpochs(int256(assets));
         _updateUserEpochTracker(receiver, int256(assets));
 
@@ -262,12 +266,21 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
     }
 
     function _harvest() internal {
+        // Harvest the underlying in slot 0, which must be claimed
         uint256 pending = yieldSource.amountPending();
         yieldSource.harvest();
         globalYieldInfos[address(yieldSource.yieldToken())].harvestedYield += pending;
+
+        // Harvest reward tokens in slots 1+, which are simply transferred into
+        // the contract
+        for (uint8 i = 1; i < uint8(rewardTokens.length); i++) {
+            address t = address(rewardTokens[i]);
+            GlobalYieldInfo storage gyInfo = globalYieldInfos[t];
+            gyInfo.harvestedYield = (IERC20(t).balanceOf(address(this)) +
+                                     gyInfo.claimedYield);
+        }
     }
 
-    /* function cumulativeYield(address yieldToken) external view returns (uint256) { */
     function cumulativeYield() external view returns (uint256) {
         return _cumulativeYield(address(yieldSource.yieldToken()));
     }
@@ -276,13 +289,14 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
         if (yieldToken == address(yieldSource.yieldToken())) {
             return globalYieldInfos[yieldToken].harvestedYield + yieldSource.amountPending();
         } else {
-            return 0;
+            return (IERC20(yieldToken).balanceOf(address(this)) +
+                    globalYieldInfos[yieldToken].claimedYield);
         }
     }
 
     function _yieldPerToken(address yieldToken) internal view returns (uint256) {
         GlobalYieldInfo storage gyInfo = globalYieldInfos[yieldToken];
-        if (this.totalAssets() == 0) {
+         if (this.totalAssets() == 0) {
             return gyInfo.yieldPerTokenStored;
         }
         if (block.number == gyInfo.lastUpdateBlock) {
@@ -291,13 +305,15 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
         
         uint256 deltaYield = (_cumulativeYield(yieldToken) -
                               gyInfo.lastUpdateCumulativeYield);
+
         return (gyInfo.yieldPerTokenStored +
                 (deltaYield * PRECISION_FACTOR) / this.totalAssets());
     }
 
-    function _calculatePendingYield(address user, address yieldToken) internal view returns (uint256) {
+    function _calculatePendingYield(address user, address yieldToken) public view returns (uint256) {
         UserYieldInfo storage info = userYieldInfos[user][yieldToken];
         uint256 ypt = _yieldPerToken(yieldToken);
+
         return ((this.balanceOf(user) * (ypt - info.accumulatedYieldPerToken)))
             / PRECISION_FACTOR
             + info.accumulatedYield;
@@ -437,10 +453,14 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
 
         for (uint8 i = 0; i < uint8(owed.length); i++) {
             address t = address(rewardTokens[i]);
+
             _updateYield(msg.sender, t);
             require(owed[i] == userYieldInfos[msg.sender][t].accumulatedYield, "SIV: claim acc");
+
             userYieldInfos[msg.sender][t].accumulatedYield = 0;
+
             IERC20(rewardTokens[i]).safeTransfer(msg.sender, owed[i]);
+            globalYieldInfos[t].claimedYield += owed[i];
         }
 
         return owed;

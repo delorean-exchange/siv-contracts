@@ -17,6 +17,7 @@ import { FakeYieldSource as DLXFakeYieldSource } from "dlx/test/helpers/FakeYiel
 import { FakeYieldSource as FakeYieldSource3 } from "./helpers/FakeYieldSource3.sol";
 import { FakeYieldTracker } from "./helpers/FakeYieldTracker.sol";
 import { FakeYieldOracle } from "./helpers/FakeYieldOracle.sol";
+import { FakeToken } from "./helpers/FakeToken.sol";
 
 import { IWrappedETH } from "../src/interfaces/IWrappedETH.sol";
 import { IRewardTracker } from "../src/interfaces/gmx/IRewardTracker.sol";
@@ -152,6 +153,14 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         assertEq(IERC20(yt).balanceOf(address(vault)), 0);
         assertEq(IERC20(yt).balanceOf(user0), 2400e18);
 
+        // Add incentive rewards
+        FakeToken it = new FakeToken("Incentives", "INC", 100e18);
+        vault.addRewardToken(address(it));
+        it.transfer(address(vault), 1e18);
+        vm.prank(user0);
+        vault.claimRewards();
+        assertEq(it.balanceOf(user0), 1e18);
+
         // Advance multiple blocks, change yield rate, advance more blocks
         vm.roll(block.number + 2);
         assertEq(vault.cumulativeYield(), 3200e18);
@@ -229,10 +238,16 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         vault.claimRewards();
         assertEq(vault.calculatePendingYield(user1), 0);
         assertEq(yt.balanceOf(user1), 1600e18);
+        assertEq(it.balanceOf(user0), 1e18);
+        assertEq(it.balanceOf(user1), 0);
 
         // Third user deposits, advance some blocks, change yield rate, users claim on different blocks
         address user2 = createTestUser(2);
         source.mintGenerator(user2, 20e18);
+
+        // Transfer 14e18 incentives, to be split 2/4/8 between user0/1/2
+        it.transfer(address(vault), 14e18);
+
         vm.startPrank(user2);
 
         // Set balance to 0 WETH for user2
@@ -241,7 +256,9 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         gt.approve(address(vault), 8e18);
         assertEq(vault.previewDeposit(8e18), 8e18);
         before = vault.cumulativeYield();
+
         vault.deposit(8e18, user2);
+
         assertEq(vault.cumulativeYield(), before);
         assertEq(gt.balanceOf(user0), 8e18);
         assertEq(gt.balanceOf(user1), 16e18);
@@ -254,6 +271,11 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         vm.stopPrank();
 
         vm.roll(block.number + 1);
+
+        assertEq(vault._calculatePendingYield(user0, address(it)), 2e18);
+        assertEq(vault._calculatePendingYield(user1, address(it)), 4e18);
+        assertEq(vault._calculatePendingYield(user2, address(it)), 8e18);
+
         assertEq(vault.calculatePendingYield(user0), 200e18);
         assertEq(vault.calculatePendingYield(user1), 400e18);
         assertEq(vault.calculatePendingYield(user2), 800e18);
@@ -272,12 +294,15 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
 
         vm.prank(user1);
         vault.claimRewards();
+
         assertEq(vault.calculatePendingYield(user0), 1000e18);
         assertEq(vault.calculatePendingYield(user1), 0);
         assertEq(vault.calculatePendingYield(user2), 4000e18);
         assertEq(yt.balanceOf(user0), 4800e18);
         assertEq(yt.balanceOf(user1), 3600e18);
         assertEq(yt.balanceOf(user2), 0);
+
+        assertEq(it.balanceOf(user1), 4e18);
 
         vm.roll(block.number + 1);
         assertEq(vault.calculatePendingYield(user0), 1600e18);
@@ -303,6 +328,10 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         assertEq(yt.balanceOf(user0), 6400e18);
         assertEq(yt.balanceOf(user1), 4800e18);
         assertEq(yt.balanceOf(user2), 6400e18);
+
+        assertEq(it.balanceOf(user0), 3e18);
+        assertEq(it.balanceOf(user1), 4e18);
+        assertEq(it.balanceOf(user2), 8e18);
     }
 
     function testDepegYieldAccounting() public {
@@ -413,10 +442,6 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         vm.startPrank(ALICE);
         gt.approve(address(vault), 3e18);
 
-        console.log("");
-        console.log("==> Make another deposit");
-        console.log("");
-
         vault.deposit(3e18, ALICE);
         vm.stopPrank();
 
@@ -510,7 +535,6 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         }
         pool = new UniswapV3LiquidityPool(address(uniswapV3Pool), arbitrumSwapRouter, arbitrumQuoterV2);
         npvSwap = new NPVSwap(address(npvToken), address(slice), address(pool));
-        console.log("made the swap:", address(npvSwap));
 
         // Add liquidity
         vm.startPrank(ALICE);
