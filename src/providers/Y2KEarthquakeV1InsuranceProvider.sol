@@ -43,7 +43,7 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
         int256 len = int256(vault.epochsLength());
         for (int256 i = len - 1; i >= 0 && i > len - 2; i--) {
             uint256 epochId = vault.epochs(uint256(i));
-            // TODO: verify taht if current epoch is manually ended, this will still work
+            // TODO: verify that if current epoch is manually ended, this will still work
             if (block.timestamp > vault.idEpochBegin(epochId) && !vault.idEpochEnded(epochId)) {
                 return epochId;
             }
