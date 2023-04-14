@@ -599,14 +599,14 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         vm.stopPrank();
 
         vm.prank(ADMIN);
-        vault.purchaseInsuranceForNextEpoch(99_00);
+        vault.purchaseInsuranceForNextEpoch(99_00, 484807680000);
 
         // Trigger a depeg
         vm.warp(beginEpoch + 10 days);
         assertEq(epochPayout(vault, address(provider), 0), 0);
         controller.triggerDepeg(SINGLE_MARKET_INDEX, endEpoch);
 
-        vault.claimInsurancePayouts();
+        vault.claimVaultPayouts();
 
         assertTrue(IERC20(WETH).balanceOf(address(vault)) > 199e18);
         assertTrue(IERC20(WETH).balanceOf(address(vault)) >= epochPayout(vault, address(provider), 0));
@@ -615,7 +615,7 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         assertEq(epochPayout(vault, address(provider), 0), 199000000000024154370);
 
         // Redundant claim should not change it
-        vault.claimInsurancePayouts();
+        vault.claimVaultPayouts();
         assertEq(epochPayout(vault, address(provider), 0), 199000000000024154370);
         assertEq(IERC20(WETH).balanceOf(address(vault)), 199000000043502021492);
 

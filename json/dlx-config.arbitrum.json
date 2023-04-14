@@ -1,560 +1,6 @@
 {
-  "glp_dataDebt": {
-    "address": "0xEeb3e5c51F6CBd408272D9AA7c408ddDeDF6A74c",
-    "abi": [
-      {
-        "inputs": [
-          {
-            "internalType": "uint128",
-            "name": "interval_",
-            "type": "uint128"
-          }
-        ],
-        "stateMutability": "nonpayable",
-        "type": "constructor"
-      },
-      {
-        "anonymous": false,
-        "inputs": [
-          {
-            "indexed": true,
-            "internalType": "address",
-            "name": "previousOwner",
-            "type": "address"
-          },
-          {
-            "indexed": true,
-            "internalType": "address",
-            "name": "newOwner",
-            "type": "address"
-          }
-        ],
-        "name": "OwnershipTransferred",
-        "type": "event"
-      },
-      {
-        "inputs": [],
-        "name": "PRECISION_FACTOR",
-        "outputs": [
-          {
-            "internalType": "uint256",
-            "name": "",
-            "type": "uint256"
-          }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-      },
-      {
-        "inputs": [],
-        "name": "current",
-        "outputs": [
-          {
-            "components": [
-              {
-                "internalType": "uint256",
-                "name": "tokens",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint256",
-                "name": "yield",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint256",
-                "name": "acc",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint128",
-                "name": "blockTimestamp",
-                "type": "uint128"
-              },
-              {
-                "internalType": "uint128",
-                "name": "epochSeconds",
-                "type": "uint128"
-              }
-            ],
-            "internalType": "struct YieldData.Epoch",
-            "name": "",
-            "type": "tuple"
-          }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-      },
-      {
-        "inputs": [],
-        "name": "epochIndex",
-        "outputs": [
-          {
-            "internalType": "uint128",
-            "name": "",
-            "type": "uint128"
-          }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-      },
-      {
-        "inputs": [
-          {
-            "internalType": "uint256",
-            "name": "",
-            "type": "uint256"
-          }
-        ],
-        "name": "epochs",
-        "outputs": [
-          {
-            "internalType": "uint256",
-            "name": "tokens",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "yield",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "acc",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint128",
-            "name": "blockTimestamp",
-            "type": "uint128"
-          },
-          {
-            "internalType": "uint128",
-            "name": "epochSeconds",
-            "type": "uint128"
-          }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-      },
-      {
-        "inputs": [],
-        "name": "interval",
-        "outputs": [
-          {
-            "internalType": "uint128",
-            "name": "",
-            "type": "uint128"
-          }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-      },
-      {
-        "inputs": [],
-        "name": "isEmpty",
-        "outputs": [
-          {
-            "internalType": "bool",
-            "name": "",
-            "type": "bool"
-          }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-      },
-      {
-        "inputs": [],
-        "name": "owner",
-        "outputs": [
-          {
-            "internalType": "address",
-            "name": "",
-            "type": "address"
-          }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-      },
-      {
-        "inputs": [
-          {
-            "internalType": "uint256",
-            "name": "tokens",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "yield",
-            "type": "uint256"
-          }
-        ],
-        "name": "record",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-      },
-      {
-        "inputs": [],
-        "name": "renounceOwnership",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-      },
-      {
-        "inputs": [
-          {
-            "internalType": "address",
-            "name": "writer_",
-            "type": "address"
-          }
-        ],
-        "name": "setWriter",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-      },
-      {
-        "inputs": [
-          {
-            "internalType": "address",
-            "name": "newOwner",
-            "type": "address"
-          }
-        ],
-        "name": "transferOwnership",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-      },
-      {
-        "inputs": [],
-        "name": "writer",
-        "outputs": [
-          {
-            "internalType": "address",
-            "name": "",
-            "type": "address"
-          }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-      },
-      {
-        "inputs": [
-          {
-            "internalType": "uint128",
-            "name": "start",
-            "type": "uint128"
-          },
-          {
-            "internalType": "uint128",
-            "name": "end",
-            "type": "uint128"
-          },
-          {
-            "internalType": "uint256",
-            "name": "tokens",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "yield",
-            "type": "uint256"
-          }
-        ],
-        "name": "yieldPerTokenPerSecond",
-        "outputs": [
-          {
-            "internalType": "uint256",
-            "name": "",
-            "type": "uint256"
-          }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-      }
-    ]
-  },
-  "glp_dataCredit": {
-    "address": "0xD65ba400eB6D9dC7189edF877991130500D7b67A",
-    "abi": [
-      {
-        "inputs": [
-          {
-            "internalType": "uint128",
-            "name": "interval_",
-            "type": "uint128"
-          }
-        ],
-        "stateMutability": "nonpayable",
-        "type": "constructor"
-      },
-      {
-        "anonymous": false,
-        "inputs": [
-          {
-            "indexed": true,
-            "internalType": "address",
-            "name": "previousOwner",
-            "type": "address"
-          },
-          {
-            "indexed": true,
-            "internalType": "address",
-            "name": "newOwner",
-            "type": "address"
-          }
-        ],
-        "name": "OwnershipTransferred",
-        "type": "event"
-      },
-      {
-        "inputs": [],
-        "name": "PRECISION_FACTOR",
-        "outputs": [
-          {
-            "internalType": "uint256",
-            "name": "",
-            "type": "uint256"
-          }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-      },
-      {
-        "inputs": [],
-        "name": "current",
-        "outputs": [
-          {
-            "components": [
-              {
-                "internalType": "uint256",
-                "name": "tokens",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint256",
-                "name": "yield",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint256",
-                "name": "acc",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint128",
-                "name": "blockTimestamp",
-                "type": "uint128"
-              },
-              {
-                "internalType": "uint128",
-                "name": "epochSeconds",
-                "type": "uint128"
-              }
-            ],
-            "internalType": "struct YieldData.Epoch",
-            "name": "",
-            "type": "tuple"
-          }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-      },
-      {
-        "inputs": [],
-        "name": "epochIndex",
-        "outputs": [
-          {
-            "internalType": "uint128",
-            "name": "",
-            "type": "uint128"
-          }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-      },
-      {
-        "inputs": [
-          {
-            "internalType": "uint256",
-            "name": "",
-            "type": "uint256"
-          }
-        ],
-        "name": "epochs",
-        "outputs": [
-          {
-            "internalType": "uint256",
-            "name": "tokens",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "yield",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "acc",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint128",
-            "name": "blockTimestamp",
-            "type": "uint128"
-          },
-          {
-            "internalType": "uint128",
-            "name": "epochSeconds",
-            "type": "uint128"
-          }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-      },
-      {
-        "inputs": [],
-        "name": "interval",
-        "outputs": [
-          {
-            "internalType": "uint128",
-            "name": "",
-            "type": "uint128"
-          }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-      },
-      {
-        "inputs": [],
-        "name": "isEmpty",
-        "outputs": [
-          {
-            "internalType": "bool",
-            "name": "",
-            "type": "bool"
-          }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-      },
-      {
-        "inputs": [],
-        "name": "owner",
-        "outputs": [
-          {
-            "internalType": "address",
-            "name": "",
-            "type": "address"
-          }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-      },
-      {
-        "inputs": [
-          {
-            "internalType": "uint256",
-            "name": "tokens",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "yield",
-            "type": "uint256"
-          }
-        ],
-        "name": "record",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-      },
-      {
-        "inputs": [],
-        "name": "renounceOwnership",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-      },
-      {
-        "inputs": [
-          {
-            "internalType": "address",
-            "name": "writer_",
-            "type": "address"
-          }
-        ],
-        "name": "setWriter",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-      },
-      {
-        "inputs": [
-          {
-            "internalType": "address",
-            "name": "newOwner",
-            "type": "address"
-          }
-        ],
-        "name": "transferOwnership",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-      },
-      {
-        "inputs": [],
-        "name": "writer",
-        "outputs": [
-          {
-            "internalType": "address",
-            "name": "",
-            "type": "address"
-          }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-      },
-      {
-        "inputs": [
-          {
-            "internalType": "uint128",
-            "name": "start",
-            "type": "uint128"
-          },
-          {
-            "internalType": "uint128",
-            "name": "end",
-            "type": "uint128"
-          },
-          {
-            "internalType": "uint256",
-            "name": "tokens",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "yield",
-            "type": "uint256"
-          }
-        ],
-        "name": "yieldPerTokenPerSecond",
-        "outputs": [
-          {
-            "internalType": "uint256",
-            "name": "",
-            "type": "uint256"
-          }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-      }
-    ]
-  },
   "glp_pool": {
-    "address": "0x5Cb39Bdb910Bd3AB8399E828927Be1ae1B5E8de3",
+    "address": "0xAa44CDd7c0bfEFE7E9d85E9A2465d49eAf4feca9",
     "abi": [
       {
         "inputs": [
@@ -765,7 +211,7 @@
     ]
   },
   "glp_npvToken": {
-    "address": "0xc9c882A38388402F503F225C20572CD14338987d",
+    "address": "0x5D6a4C50816d9A8d559d14e8c6F917b3bF7d75Fc",
     "abi": [
       {
         "inputs": [
@@ -1143,545 +589,8 @@
       }
     ]
   },
-  "glp_yieldSource": {
-    "address": "0x9322Bc2e0291039c4057FAdB1c86a604849fdAa1",
-    "abi": [
-      {
-        "inputs": [],
-        "name": "amountGenerator",
-        "outputs": [
-          {
-            "internalType": "uint256",
-            "name": "",
-            "type": "uint256"
-          }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-      },
-      {
-        "inputs": [],
-        "name": "amountPending",
-        "outputs": [
-          {
-            "internalType": "uint256",
-            "name": "",
-            "type": "uint256"
-          }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-      },
-      {
-        "inputs": [
-          {
-            "internalType": "uint256",
-            "name": "amount",
-            "type": "uint256"
-          },
-          {
-            "internalType": "bool",
-            "name": "claim",
-            "type": "bool"
-          }
-        ],
-        "name": "deposit",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-      },
-      {
-        "inputs": [],
-        "name": "generatorToken",
-        "outputs": [
-          {
-            "internalType": "contract IERC20",
-            "name": "",
-            "type": "address"
-          }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-      },
-      {
-        "inputs": [],
-        "name": "harvest",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-      },
-      {
-        "inputs": [
-          {
-            "internalType": "address",
-            "name": "",
-            "type": "address"
-          }
-        ],
-        "name": "setOwner",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-      },
-      {
-        "inputs": [
-          {
-            "internalType": "uint256",
-            "name": "amount",
-            "type": "uint256"
-          },
-          {
-            "internalType": "bool",
-            "name": "claim",
-            "type": "bool"
-          },
-          {
-            "internalType": "address",
-            "name": "to",
-            "type": "address"
-          }
-        ],
-        "name": "withdraw",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-      },
-      {
-        "inputs": [],
-        "name": "yieldToken",
-        "outputs": [
-          {
-            "internalType": "contract IERC20",
-            "name": "",
-            "type": "address"
-          }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-      }
-    ]
-  },
-  "glp_npvSwap": {
-    "address": "0x51F4789854C7957156F4125Aff1820A9505A4e4F",
-    "abi": [
-      {
-        "inputs": [
-          {
-            "internalType": "address",
-            "name": "npvToken_",
-            "type": "address"
-          },
-          {
-            "internalType": "address",
-            "name": "slice_",
-            "type": "address"
-          },
-          {
-            "internalType": "address",
-            "name": "pool_",
-            "type": "address"
-          }
-        ],
-        "stateMutability": "nonpayable",
-        "type": "constructor"
-      },
-      {
-        "inputs": [
-          {
-            "internalType": "address",
-            "name": "owner",
-            "type": "address"
-          },
-          {
-            "internalType": "address",
-            "name": "recipient",
-            "type": "address"
-          },
-          {
-            "internalType": "uint256",
-            "name": "tokens",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "yield",
-            "type": "uint256"
-          },
-          {
-            "internalType": "bytes",
-            "name": "memo",
-            "type": "bytes"
-          }
-        ],
-        "name": "lockForNPV",
-        "outputs": [
-          {
-            "internalType": "uint256",
-            "name": "",
-            "type": "uint256"
-          }
-        ],
-        "stateMutability": "nonpayable",
-        "type": "function"
-      },
-      {
-        "inputs": [
-          {
-            "internalType": "address",
-            "name": "owner",
-            "type": "address"
-          },
-          {
-            "internalType": "uint256",
-            "name": "tokens",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "yield",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "amountOutMin",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint128",
-            "name": "sqrtPriceLimitX96",
-            "type": "uint128"
-          },
-          {
-            "internalType": "bytes",
-            "name": "memo",
-            "type": "bytes"
-          }
-        ],
-        "name": "lockForYield",
-        "outputs": [
-          {
-            "internalType": "uint256",
-            "name": "",
-            "type": "uint256"
-          }
-        ],
-        "stateMutability": "nonpayable",
-        "type": "function"
-      },
-      {
-        "inputs": [],
-        "name": "npvToken",
-        "outputs": [
-          {
-            "internalType": "contract NPVToken",
-            "name": "",
-            "type": "address"
-          }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-      },
-      {
-        "inputs": [],
-        "name": "pool",
-        "outputs": [
-          {
-            "internalType": "contract ILiquidityPool",
-            "name": "",
-            "type": "address"
-          }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-      },
-      {
-        "inputs": [
-          {
-            "internalType": "uint256",
-            "name": "tokens",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "yield",
-            "type": "uint256"
-          }
-        ],
-        "name": "previewLockForNPV",
-        "outputs": [
-          {
-            "internalType": "uint256",
-            "name": "",
-            "type": "uint256"
-          }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-      },
-      {
-        "inputs": [
-          {
-            "internalType": "uint256",
-            "name": "tokens",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "yield",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint128",
-            "name": "sqrtPriceLimitX96",
-            "type": "uint128"
-          }
-        ],
-        "name": "previewLockForYield",
-        "outputs": [
-          {
-            "internalType": "uint256",
-            "name": "",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "",
-            "type": "uint256"
-          }
-        ],
-        "stateMutability": "nonpayable",
-        "type": "function"
-      },
-      {
-        "inputs": [
-          {
-            "internalType": "uint256",
-            "name": "yieldIn",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint128",
-            "name": "sqrtPriceLimitX96",
-            "type": "uint128"
-          }
-        ],
-        "name": "previewSwapForSlice",
-        "outputs": [
-          {
-            "internalType": "uint256",
-            "name": "",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "",
-            "type": "uint256"
-          }
-        ],
-        "stateMutability": "nonpayable",
-        "type": "function"
-      },
-      {
-        "inputs": [
-          {
-            "internalType": "uint256",
-            "name": "npvIn",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint128",
-            "name": "sqrtPriceLimitX96",
-            "type": "uint128"
-          }
-        ],
-        "name": "previewSwapNPVForYield",
-        "outputs": [
-          {
-            "internalType": "uint256",
-            "name": "",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "",
-            "type": "uint256"
-          }
-        ],
-        "stateMutability": "nonpayable",
-        "type": "function"
-      },
-      {
-        "inputs": [
-          {
-            "internalType": "uint256",
-            "name": "yieldOut",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint128",
-            "name": "sqrtPriceLimitX96",
-            "type": "uint128"
-          }
-        ],
-        "name": "previewSwapNPVForYieldOut",
-        "outputs": [
-          {
-            "internalType": "uint256",
-            "name": "",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "",
-            "type": "uint256"
-          }
-        ],
-        "stateMutability": "nonpayable",
-        "type": "function"
-      },
-      {
-        "inputs": [
-          {
-            "internalType": "uint256",
-            "name": "yieldIn",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint128",
-            "name": "sqrtPriceLimitX96",
-            "type": "uint128"
-          }
-        ],
-        "name": "previewSwapYieldForNPV",
-        "outputs": [
-          {
-            "internalType": "uint256",
-            "name": "",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "",
-            "type": "uint256"
-          }
-        ],
-        "stateMutability": "nonpayable",
-        "type": "function"
-      },
-      {
-        "inputs": [
-          {
-            "internalType": "uint256",
-            "name": "npvOut",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint128",
-            "name": "sqrtPriceLimitX96",
-            "type": "uint128"
-          }
-        ],
-        "name": "previewSwapYieldForNPVOut",
-        "outputs": [
-          {
-            "internalType": "uint256",
-            "name": "",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "",
-            "type": "uint256"
-          }
-        ],
-        "stateMutability": "nonpayable",
-        "type": "function"
-      },
-      {
-        "inputs": [],
-        "name": "slice",
-        "outputs": [
-          {
-            "internalType": "contract YieldSlice",
-            "name": "",
-            "type": "address"
-          }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-      },
-      {
-        "inputs": [
-          {
-            "internalType": "address",
-            "name": "recipient",
-            "type": "address"
-          },
-          {
-            "internalType": "uint256",
-            "name": "yield",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "npvMin",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint128",
-            "name": "sqrtPriceLimitX96",
-            "type": "uint128"
-          },
-          {
-            "internalType": "bytes",
-            "name": "memo",
-            "type": "bytes"
-          }
-        ],
-        "name": "swapForSlice",
-        "outputs": [
-          {
-            "internalType": "uint256",
-            "name": "",
-            "type": "uint256"
-          }
-        ],
-        "stateMutability": "nonpayable",
-        "type": "function"
-      },
-      {
-        "inputs": [
-          {
-            "internalType": "address",
-            "name": "recipient",
-            "type": "address"
-          },
-          {
-            "internalType": "uint256",
-            "name": "npv",
-            "type": "uint256"
-          },
-          {
-            "internalType": "bytes",
-            "name": "memo",
-            "type": "bytes"
-          }
-        ],
-        "name": "swapNPVForSlice",
-        "outputs": [
-          {
-            "internalType": "uint256",
-            "name": "",
-            "type": "uint256"
-          }
-        ],
-        "stateMutability": "nonpayable",
-        "type": "function"
-      }
-    ]
-  },
   "glp_slice": {
-    "address": "0x9d8E0053a3B068cc453B569eA1D7E2Ee50a12c43",
+    "address": "0x2274E8EC0b63f3Da638CF6BF558Edbf66c1bd528",
     "abi": [
       {
         "inputs": [
@@ -2261,7 +1170,7 @@
             "type": "uint256"
           }
         ],
-        "name": "generated",
+        "name": "generatedCredit",
         "outputs": [
           {
             "internalType": "uint256",
@@ -2290,7 +1199,7 @@
             "type": "uint256"
           }
         ],
-        "name": "generatedCredit",
+        "name": "generatedDebt",
         "outputs": [
           {
             "internalType": "uint256",
@@ -2355,6 +1264,24 @@
           }
         ],
         "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "recipient",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "amount",
+            "type": "uint256"
+          }
+        ],
+        "name": "mintFromYield",
+        "outputs": [],
+        "stateMutability": "nonpayable",
         "type": "function"
       },
       {
@@ -2699,8 +1626,1122 @@
       }
     ]
   },
+  "glp_dataCredit": {
+    "address": "0xA245b5b7e5B01CeEeB35b2A60bC42eC9F4A5a8cf",
+    "abi": [
+      {
+        "inputs": [
+          {
+            "internalType": "uint128",
+            "name": "interval_",
+            "type": "uint128"
+          }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "constructor"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": true,
+            "internalType": "address",
+            "name": "previousOwner",
+            "type": "address"
+          },
+          {
+            "indexed": true,
+            "internalType": "address",
+            "name": "newOwner",
+            "type": "address"
+          }
+        ],
+        "name": "OwnershipTransferred",
+        "type": "event"
+      },
+      {
+        "inputs": [],
+        "name": "PRECISION_FACTOR",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "current",
+        "outputs": [
+          {
+            "components": [
+              {
+                "internalType": "uint256",
+                "name": "tokens",
+                "type": "uint256"
+              },
+              {
+                "internalType": "uint256",
+                "name": "yield",
+                "type": "uint256"
+              },
+              {
+                "internalType": "uint256",
+                "name": "acc",
+                "type": "uint256"
+              },
+              {
+                "internalType": "uint128",
+                "name": "blockTimestamp",
+                "type": "uint128"
+              },
+              {
+                "internalType": "uint128",
+                "name": "epochSeconds",
+                "type": "uint128"
+              }
+            ],
+            "internalType": "struct YieldData.Epoch",
+            "name": "",
+            "type": "tuple"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "epochIndex",
+        "outputs": [
+          {
+            "internalType": "uint128",
+            "name": "",
+            "type": "uint128"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "name": "epochs",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "tokens",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "yield",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "acc",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint128",
+            "name": "blockTimestamp",
+            "type": "uint128"
+          },
+          {
+            "internalType": "uint128",
+            "name": "epochSeconds",
+            "type": "uint128"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "interval",
+        "outputs": [
+          {
+            "internalType": "uint128",
+            "name": "",
+            "type": "uint128"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "isEmpty",
+        "outputs": [
+          {
+            "internalType": "bool",
+            "name": "",
+            "type": "bool"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "owner",
+        "outputs": [
+          {
+            "internalType": "address",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "uint256",
+            "name": "tokens",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "yield",
+            "type": "uint256"
+          }
+        ],
+        "name": "record",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "renounceOwnership",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "writer_",
+            "type": "address"
+          }
+        ],
+        "name": "setWriter",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "newOwner",
+            "type": "address"
+          }
+        ],
+        "name": "transferOwnership",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "writer",
+        "outputs": [
+          {
+            "internalType": "address",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "uint128",
+            "name": "start",
+            "type": "uint128"
+          },
+          {
+            "internalType": "uint128",
+            "name": "end",
+            "type": "uint128"
+          },
+          {
+            "internalType": "uint256",
+            "name": "tokens",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "yield",
+            "type": "uint256"
+          }
+        ],
+        "name": "yieldPerTokenPerSecond",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      }
+    ]
+  },
+  "glp_dataDebt": {
+    "address": "0x85d7784e53aC938A4BefFAc157C7c3eAD573aF8b",
+    "abi": [
+      {
+        "inputs": [
+          {
+            "internalType": "uint128",
+            "name": "interval_",
+            "type": "uint128"
+          }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "constructor"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": true,
+            "internalType": "address",
+            "name": "previousOwner",
+            "type": "address"
+          },
+          {
+            "indexed": true,
+            "internalType": "address",
+            "name": "newOwner",
+            "type": "address"
+          }
+        ],
+        "name": "OwnershipTransferred",
+        "type": "event"
+      },
+      {
+        "inputs": [],
+        "name": "PRECISION_FACTOR",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "current",
+        "outputs": [
+          {
+            "components": [
+              {
+                "internalType": "uint256",
+                "name": "tokens",
+                "type": "uint256"
+              },
+              {
+                "internalType": "uint256",
+                "name": "yield",
+                "type": "uint256"
+              },
+              {
+                "internalType": "uint256",
+                "name": "acc",
+                "type": "uint256"
+              },
+              {
+                "internalType": "uint128",
+                "name": "blockTimestamp",
+                "type": "uint128"
+              },
+              {
+                "internalType": "uint128",
+                "name": "epochSeconds",
+                "type": "uint128"
+              }
+            ],
+            "internalType": "struct YieldData.Epoch",
+            "name": "",
+            "type": "tuple"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "epochIndex",
+        "outputs": [
+          {
+            "internalType": "uint128",
+            "name": "",
+            "type": "uint128"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "name": "epochs",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "tokens",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "yield",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "acc",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint128",
+            "name": "blockTimestamp",
+            "type": "uint128"
+          },
+          {
+            "internalType": "uint128",
+            "name": "epochSeconds",
+            "type": "uint128"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "interval",
+        "outputs": [
+          {
+            "internalType": "uint128",
+            "name": "",
+            "type": "uint128"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "isEmpty",
+        "outputs": [
+          {
+            "internalType": "bool",
+            "name": "",
+            "type": "bool"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "owner",
+        "outputs": [
+          {
+            "internalType": "address",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "uint256",
+            "name": "tokens",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "yield",
+            "type": "uint256"
+          }
+        ],
+        "name": "record",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "renounceOwnership",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "writer_",
+            "type": "address"
+          }
+        ],
+        "name": "setWriter",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "newOwner",
+            "type": "address"
+          }
+        ],
+        "name": "transferOwnership",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "writer",
+        "outputs": [
+          {
+            "internalType": "address",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "uint128",
+            "name": "start",
+            "type": "uint128"
+          },
+          {
+            "internalType": "uint128",
+            "name": "end",
+            "type": "uint128"
+          },
+          {
+            "internalType": "uint256",
+            "name": "tokens",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "yield",
+            "type": "uint256"
+          }
+        ],
+        "name": "yieldPerTokenPerSecond",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      }
+    ]
+  },
+  "glp_npvSwap": {
+    "address": "0x1aE6E310D6b65BA734c6eAeE6caAC504C9cC6E7F",
+    "abi": [
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "npvToken_",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "slice_",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "pool_",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "constructor"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "owner",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "recipient",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "tokens",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "yield",
+            "type": "uint256"
+          },
+          {
+            "internalType": "bytes",
+            "name": "memo",
+            "type": "bytes"
+          }
+        ],
+        "name": "lockForNPV",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "owner",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "tokens",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "yield",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "amountOutMin",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint128",
+            "name": "sqrtPriceLimitX96",
+            "type": "uint128"
+          },
+          {
+            "internalType": "bytes",
+            "name": "memo",
+            "type": "bytes"
+          }
+        ],
+        "name": "lockForYield",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "uint256",
+            "name": "id",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "amount",
+            "type": "uint256"
+          }
+        ],
+        "name": "mintAndPayWithYield",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "npvToken",
+        "outputs": [
+          {
+            "internalType": "contract NPVToken",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "pool",
+        "outputs": [
+          {
+            "internalType": "contract ILiquidityPool",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "uint256",
+            "name": "tokens",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "yield",
+            "type": "uint256"
+          }
+        ],
+        "name": "previewLockForNPV",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "uint256",
+            "name": "tokens",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "yield",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint128",
+            "name": "sqrtPriceLimitX96",
+            "type": "uint128"
+          }
+        ],
+        "name": "previewLockForYield",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "uint256",
+            "name": "yieldIn",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint128",
+            "name": "sqrtPriceLimitX96",
+            "type": "uint128"
+          }
+        ],
+        "name": "previewSwapForSlice",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "uint256",
+            "name": "npvIn",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint128",
+            "name": "sqrtPriceLimitX96",
+            "type": "uint128"
+          }
+        ],
+        "name": "previewSwapNPVForYield",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "uint256",
+            "name": "yieldOut",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint128",
+            "name": "sqrtPriceLimitX96",
+            "type": "uint128"
+          }
+        ],
+        "name": "previewSwapNPVForYieldOut",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "uint256",
+            "name": "yieldIn",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint128",
+            "name": "sqrtPriceLimitX96",
+            "type": "uint128"
+          }
+        ],
+        "name": "previewSwapYieldForNPV",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "uint256",
+            "name": "npvOut",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint128",
+            "name": "sqrtPriceLimitX96",
+            "type": "uint128"
+          }
+        ],
+        "name": "previewSwapYieldForNPVOut",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "slice",
+        "outputs": [
+          {
+            "internalType": "contract YieldSlice",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "recipient",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "yield",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "npvMin",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint128",
+            "name": "sqrtPriceLimitX96",
+            "type": "uint128"
+          },
+          {
+            "internalType": "bytes",
+            "name": "memo",
+            "type": "bytes"
+          }
+        ],
+        "name": "swapForSlice",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "recipient",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "npv",
+            "type": "uint256"
+          },
+          {
+            "internalType": "bytes",
+            "name": "memo",
+            "type": "bytes"
+          }
+        ],
+        "name": "swapNPVForSlice",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      }
+    ]
+  },
+  "glp_yieldSource": {
+    "address": "0x34cE06b4fEB4dB1846Dcb69e09C482d6d71D59f6",
+    "abi": [
+      {
+        "inputs": [],
+        "name": "amountGenerator",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "amountPending",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "uint256",
+            "name": "amount",
+            "type": "uint256"
+          },
+          {
+            "internalType": "bool",
+            "name": "claim",
+            "type": "bool"
+          }
+        ],
+        "name": "deposit",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "generatorToken",
+        "outputs": [
+          {
+            "internalType": "contract IERC20",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "harvest",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "name": "setOwner",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "uint256",
+            "name": "amount",
+            "type": "uint256"
+          },
+          {
+            "internalType": "bool",
+            "name": "claim",
+            "type": "bool"
+          },
+          {
+            "internalType": "address",
+            "name": "to",
+            "type": "address"
+          }
+        ],
+        "name": "withdraw",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "yieldToken",
+        "outputs": [
+          {
+            "internalType": "contract IERC20",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      }
+    ]
+  },
   "glp_discounter": {
-    "address": "0xC14b91493911aBc1D3e64BC8d16f86E9d6F6aAF0",
+    "address": "0xf7DC2096cA42Da2cBeA21D85640bb838c82894EB",
     "abi": [
       {
         "inputs": [
@@ -2952,19 +2993,6 @@
           }
         ],
         "name": "setMaxDays",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-      },
-      {
-        "inputs": [
-          {
-            "internalType": "uint256",
-            "name": "rate_",
-            "type": "uint256"
-          }
-        ],
-        "name": "setRate",
         "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"
@@ -4733,7 +4761,7 @@
             "type": "uint256"
           }
         ],
-        "name": "generated",
+        "name": "generatedCredit",
         "outputs": [
           {
             "internalType": "uint256",
@@ -4762,7 +4790,7 @@
             "type": "uint256"
           }
         ],
-        "name": "generatedCredit",
+        "name": "generatedDebt",
         "outputs": [
           {
             "internalType": "uint256",
@@ -4827,6 +4855,24 @@
           }
         ],
         "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "recipient",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "amount",
+            "type": "uint256"
+          }
+        ],
+        "name": "mintFromYield",
+        "outputs": [],
+        "stateMutability": "nonpayable",
         "type": "function"
       },
       {
@@ -5783,19 +5829,6 @@
         "inputs": [
           {
             "internalType": "uint256",
-            "name": "rate_",
-            "type": "uint256"
-          }
-        ],
-        "name": "setRate",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-      },
-      {
-        "inputs": [
-          {
-            "internalType": "uint256",
             "name": "npv",
             "type": "uint256"
           },
@@ -5933,8 +5966,31 @@
             "internalType": "uint256",
             "name": "",
             "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
           }
         ],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "uint256",
+            "name": "id",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "amount",
+            "type": "uint256"
+          }
+        ],
+        "name": "mintAndPayWithYield",
+        "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"
       },
@@ -6511,19 +6567,6 @@
         "inputs": [
           {
             "internalType": "uint256",
-            "name": "rate_",
-            "type": "uint256"
-          }
-        ],
-        "name": "setRate",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-      },
-      {
-        "inputs": [
-          {
-            "internalType": "uint256",
             "name": "npv",
             "type": "uint256"
           },
@@ -6661,8 +6704,31 @@
             "internalType": "uint256",
             "name": "",
             "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
           }
         ],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "uint256",
+            "name": "id",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "amount",
+            "type": "uint256"
+          }
+        ],
+        "name": "mintAndPayWithYield",
+        "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"
       },
@@ -9054,7 +9120,7 @@
             "type": "uint256"
           }
         ],
-        "name": "generated",
+        "name": "generatedCredit",
         "outputs": [
           {
             "internalType": "uint256",
@@ -9083,7 +9149,7 @@
             "type": "uint256"
           }
         ],
-        "name": "generatedCredit",
+        "name": "generatedDebt",
         "outputs": [
           {
             "internalType": "uint256",
@@ -9148,6 +9214,24 @@
           }
         ],
         "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "recipient",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "amount",
+            "type": "uint256"
+          }
+        ],
+        "name": "mintFromYield",
+        "outputs": [],
+        "stateMutability": "nonpayable",
         "type": "function"
       },
       {

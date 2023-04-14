@@ -126,7 +126,7 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
                 address oracle_,
                 address dlxSwap_) ERC20(name_, symbol_) {
         require(yieldSource_ != address(0), "SIV: zero source");
-        require(oracle_ != address(0), "SIV: zero oracle");
+        /* require(oracle_ != address(0), "SIV: zero oracle"); */
 
         admin = msg.sender;
 
@@ -148,6 +148,10 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
 
     function epochsLength(address provider) public view returns (uint256) {
         return providerEpochs[provider].length;
+    }
+
+    function rewardTokensLength() public view returns (uint256) {
+        return rewardTokens.length;
     }
 
     function setOracle(address oracle_) external onlyAdmin {
@@ -432,7 +436,7 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
     }
 
     // -- Rewards -- //
-    function _previewClaimRewards(address who) internal returns (uint256[] memory) {
+    function _previewClaimRewards(address who) internal view returns (uint256[] memory) {
         uint256[] memory result = new uint256[](rewardTokens.length);
         for (uint256 i = 0; i < result.length; i++) {
             result[i] = _calculatePendingYield(who, rewardTokens[i]);
@@ -440,7 +444,7 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
         return result;
     }
 
-    function previewClaimRewards(address who) external returns (uint256[] memory) {
+    function previewClaimRewards(address who) external view returns (uint256[] memory) {
         return _previewClaimRewards(who);
     }
 
@@ -569,7 +573,7 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
         return sum;
     }
 
-    function claimInsurancePayouts() external {
+    function claimVaultPayouts() external {
         for (uint256 i = 0; i < providers.length; i++) {
             IERC20 pt = providers[i].paymentToken();
             uint256 before = pt.balanceOf(address(this));
@@ -609,8 +613,8 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
     }
 
     // `minBps` is the minimum yield fronted from Delorean, in terms of basis points.
-    function purchaseInsuranceForNextEpoch(uint256 minBps) external onlyAdmin {
-        uint256 projectedYield = _projectEpochYield();
+    function purchaseInsuranceForNextEpoch(uint256 minBps, uint256 projectedYield) external onlyAdmin {
+        /* uint256 projectedYield = _projectEpochYield(); */
 
         // Get epoch's yield upfront via Delorean
         uint256 sum = 0;

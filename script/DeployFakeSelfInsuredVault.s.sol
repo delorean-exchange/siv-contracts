@@ -87,7 +87,7 @@ contract DeployFakeSelfInsuredVaultScript is BaseScript {
         vHedge = Vault(hedge);
         vRisk = Vault(risk);
 
-        vault = new SelfInsuredVault("Self Insure2d fakeGLP Vault",
+        vault = new SelfInsuredVault("Self Insured fakeGLP Vault",
                                      "sivFakeGLP",
                                      address(vaultSource.yieldToken()),
                                      address(vaultSource),
@@ -105,12 +105,10 @@ contract DeployFakeSelfInsuredVaultScript is BaseScript {
             string memory objName = "deploy";
             string memory json;
             json = vm.serializeAddress(objName, "address_vaultFactory", address(vaultFactory));
-            json = vm.serializeAddress(objName, "address_yieldOracle", address(yieldOracle));
             json = vm.serializeAddress(objName, "address_controller", address(controller));
             json = vm.serializeAddress(objName, "address_siv", address(vault));
 
             json = vm.serializeString(objName, "contractName_vaultFactory", "VaultFactory");
-            json = vm.serializeString(objName, "contractName_yieldOracle", "FakeYieldOracle");
             json = vm.serializeString(objName, "contractName_controller", "Controller");
             json = vm.serializeString(objName, "contractName_siv", "SelfInsuredVault");
 
