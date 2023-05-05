@@ -1,18 +1,20 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
+import "forge-std/console.sol";
 import {Ownable} from "openzeppelin/access/Ownable.sol";
 import {IERC20} from "openzeppelin/token/ERC20/IERC20.sol";
 import {SafeERC20} from "openzeppelin/token/ERC20/utils/SafeERC20.sol";
+import {Math} from "openzeppelin/utils/math/Math.sol";
 import {ERC1155Holder} from "openzeppelin/token/ERC1155/utils/ERC1155Holder.sol";
-import {Vault} from "y2k-earthquake/src/legacy_v1/Vault.sol";
+import {VaultV2} from "y2k-earthquake/src/v2/VaultV2.sol";
 
 import {IInsuranceProvider} from "../interfaces/IInsuranceProvider.sol";
 
-/// @title Insurance Provider for Y2k Earthquake v1
+/// @title Insurance Provider for Y2k Earthquake v2
 /// @author Delorean Exchange x Y2K Finance
 /// @dev All function calls are currently implemented without side effects
-contract Y2KEarthquakeV1InsuranceProvider is
+contract Y2KEarthquakeV2InsuranceProvider is
     IInsuranceProvider,
     Ownable,
     ERC1155Holder
@@ -20,7 +22,7 @@ contract Y2KEarthquakeV1InsuranceProvider is
     using SafeERC20 for IERC20;
 
     /// @notice Earthquake vault
-    Vault public vault;
+    VaultV2 public vault;
 
     /// @notice Token for insurance
     IERC20 public override insuredToken;
@@ -73,19 +75,21 @@ contract Y2KEarthquakeV1InsuranceProvider is
      * @dev If epoch iteration takes long, then we can think of binary search
      */
     function currentEpoch() public view returns (uint256) {
-        uint256 len = vault.epochsLength();
+        uint256 len = vault.getEpochsLength();
         if (len > 0) {
             for (uint256 i = len - 1; i >= 0; i--) {
                 uint256 epochId = vault.epochs(i);
-                if (block.timestamp > epochId) {
+                (uint40 epochBegin, uint40 epochEnd, ) = vault.getEpochConfig(
+                    epochId
+                );
+                if (block.timestamp > epochEnd) {
                     break;
                 }
 
-                uint256 epochBegin = vault.idEpochBegin(epochId);
                 if (
                     block.timestamp > epochBegin &&
-                    block.timestamp <= epochId &&
-                    !vault.idEpochEnded(epochId)
+                    block.timestamp <= epochEnd &&
+                    !vault.epochResolved(epochId)
                 ) {
                     return epochId;
                 }
@@ -96,16 +100,16 @@ contract Y2KEarthquakeV1InsuranceProvider is
 
     /**
      * @notice Returns the next epoch.
-     * @dev We assum last epoch is always next epoch
-     *   should we handle the sitaution where there are two epochs at the end,
-     *   both of which are not started? it is unlikely but may happen if there is a
-     *   misconfiguration on Y2K side
      */
     function nextEpoch() public view returns (uint256) {
-        uint256 len = vault.epochsLength();
+        uint256 len = vault.getEpochsLength();
         if (len == 0) return 0;
         uint256 epochId = vault.epochs(len - 1);
-        if (block.timestamp > vault.idEpochBegin(epochId)) return 0;
+        (uint40 epochBegin, , ) = vault.getEpochConfig(epochId);
+        // TODO: should we handle the sitaution where there are two epochs at the end,
+        // both of which are not started? it is unlikely but may happen if there is a
+        // misconfiguration on Y2K side
+        if (block.timestamp > epochBegin) return 0;
         return epochId;
     }
 
@@ -115,7 +119,7 @@ contract Y2KEarthquakeV1InsuranceProvider is
      * @param epochId Epoch Id
      */
     function followingEpoch(uint256 epochId) external view returns (uint256) {
-        uint256 len = vault.epochsLength();
+        uint256 len = vault.getEpochsLength();
         for (uint256 i = 1; i < len; i++) {
             if (vault.epochs(i - 1) == epochId) {
                 return vault.epochs(i);
@@ -129,7 +133,8 @@ contract Y2KEarthquakeV1InsuranceProvider is
      */
     function epochDuration() external view override returns (uint256) {
         uint256 id = currentEpoch();
-        return id - vault.idEpochBegin(id);
+        (uint40 epochBegin, uint40 epochEnd, ) = vault.getEpochConfig(id);
+        return epochEnd - epochBegin;
     }
 
     /**
@@ -137,7 +142,8 @@ contract Y2KEarthquakeV1InsuranceProvider is
      */
     function isNextEpochPurchasable() external view override returns (bool) {
         uint256 id = nextEpoch();
-        return id > 0 && block.timestamp <= vault.idEpochBegin(id);
+        (uint40 epochBegin, , ) = vault.getEpochConfig(id);
+        return id > 0 && block.timestamp <= epochBegin;
     }
 
     /**
@@ -159,7 +165,7 @@ contract Y2KEarthquakeV1InsuranceProvider is
      */
     function pendingPayouts() external view override returns (uint256) {
         uint256 pending = 0;
-        uint256 len = vault.epochsLength();
+        uint256 len = vault.getEpochsLength();
         for (uint256 i = lastClaimedEpochIndex + 1; i < len; i++) {
             pending += _pendingPayoutForEpoch(vault.epochs(i));
         }
@@ -189,12 +195,9 @@ contract Y2KEarthquakeV1InsuranceProvider is
         vault.deposit(nextEpoch(), amountPremium, address(this));
     }
 
-    /**
-     * @notice Claim payouts.
-     */
     function claimPayouts() external override returns (uint256 amount) {
-        uint256 len = vault.epochsLength();
-        for (uint256 i = lastClaimedEpochIndex + 1; i < len; i++) {
+        uint256 len = vault.getEpochsLength();
+        for (uint256 i = lastClaimedEpochIndex; i < len; i++) {
             uint256 epochId = vault.epochs(i);
             uint256 assets = vault.balanceOf(address(this), epochId);
             amount += vault.withdraw(
@@ -206,6 +209,7 @@ contract Y2KEarthquakeV1InsuranceProvider is
         }
         lastClaimedEpochIndex = len - 1;
         paymentToken.safeTransfer(beneficiary, amount);
+        return amount;
     }
 
     /**
@@ -226,8 +230,8 @@ contract Y2KEarthquakeV1InsuranceProvider is
      */
     function _setInsuranceVault(address _vault) internal {
         require(_vault != address(vault), "Vault already set");
-        vault = Vault(_vault);
-        insuredToken = IERC20(address(vault.tokenInsured()));
+        vault = VaultV2(_vault);
+        insuredToken = IERC20(address(vault.token()));
         paymentToken = IERC20(address(vault.asset()));
         lastClaimedEpochIndex = 0;
     }
@@ -235,23 +239,12 @@ contract Y2KEarthquakeV1InsuranceProvider is
     /**
      * @notice Returns pending payouts for specifc epoch.
      * @param epochId Epoch Id
-     * @return entitledShares Payout amount
      */
     function _pendingPayoutForEpoch(
         uint256 epochId
-    ) internal view returns (uint256 entitledShares) {
-        if (vault.idFinalTVL(epochId) == 0) return 0;
-        uint256 assets = vault.balanceOf(address(this), epochId);
-        entitledShares = vault.previewWithdraw(epochId, assets);
-        // Mirror Y2K Vault logic for deducting fee
-        if (entitledShares > assets) {
-            uint256 premium = entitledShares - assets;
-            uint256 feeValue = vault.calculateWithdrawalFeeValue(
-                premium,
-                epochId
-            );
-            entitledShares = entitledShares - feeValue;
-        }
-        return entitledShares;
+    ) internal view returns (uint256) {
+        if (vault.finalTVL(epochId) == 0) return 0;
+        uint256 shares = vault.balanceOf(address(this), epochId);
+        return vault.previewWithdraw(epochId, shares);
     }
 }
