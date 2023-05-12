@@ -5,10 +5,10 @@ import "forge-std/console.sol";
 
 import { IERC20 } from "openzeppelin/token/ERC20/IERC20.sol";
 
-import { ControllerHelper } from "y2k-earthquake/test/ControllerHelper.sol";
-import { Vault } from "y2k-earthquake/src/Vault.sol";
-import { VaultFactory, TimeLock} from "y2k-earthquake/src/VaultFactory.sol";
-import { Controller } from "y2k-earthquake/src/Controller.sol"; 
+import { ControllerHelper } from "y2k-earthquake/test/legacy_v1/ControllerHelper.sol";
+import { Vault } from "y2k-earthquake/src/legacy_v1/Vault.sol";
+import { VaultFactory, TimeLock} from "y2k-earthquake/src/legacy_v1/VaultFactory.sol";
+import { Controller } from "y2k-earthquake/src/legacy_v1/Controller.sol"; 
 import { FakeOracle } from "y2k-earthquake/test/oracles/FakeOracle.sol";
 
 import { BaseTest } from "./BaseTest.sol";

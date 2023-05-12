@@ -10,10 +10,10 @@ import { IYieldSource } from  "dlx/src/interfaces/IYieldSource.sol";
 
 import { FakeYieldOracle } from "../test/helpers/FakeYieldOracle.sol";
 
-import { VaultFactory, TimeLock } from "y2k-earthquake/src/VaultFactory.sol";
+import { VaultFactory, TimeLock } from "y2k-earthquake/src/legacy_v1/VaultFactory.sol";
 import { FakeOracle } from "y2k-earthquake/test/oracles/FakeOracle.sol";
-import { Controller } from "y2k-earthquake/src/Controller.sol"; 
-import { Vault } from "y2k-earthquake/src/Vault.sol";
+import { Controller } from "y2k-earthquake/src/legacy_v1/Controller.sol"; 
+import { Vault } from "y2k-earthquake/src/legacy_v1/Vault.sol";
 
 import { IInsuranceProvider } from "../src/interfaces/IInsuranceProvider.sol";
 import { SelfInsuredVault } from "../src/vaults/SelfInsuredVault.sol";
