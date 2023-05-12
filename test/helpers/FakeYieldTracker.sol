@@ -28,7 +28,7 @@ contract FakeYieldTracker is IYieldTracker {
     mapping(address => uint256) public pending;
 
     address public yieldToken;
-    address public generatorToken;
+    address public sourceToken;
     address[] public holders;
 
     constructor(uint256 yieldPerBlock_) {
@@ -36,7 +36,7 @@ contract FakeYieldTracker is IYieldTracker {
         yieldPerBlock = yieldPerBlock_;
 
         yieldToken = address(new FakeToken("TestYS: Yield Token", "YS:Y", 0));
-        generatorToken = address(new CallbackFakeToken("TestYS: Generator Token", "YS:G", 0, address(this)));
+        sourceToken = address(new CallbackFakeToken("TestYS: Generator Token", "YS:G", 0, address(this)));
     }
 
     function callback(address who) public {
@@ -55,7 +55,7 @@ contract FakeYieldTracker is IYieldTracker {
     function checkpointPending() public {
         for (uint256 i = 0; i < holders.length; i++) {
             address holder = holders[i];
-            pending[holder] += amountPending(holder);
+            pending[holder] += pendingYield(holder);
             lastHarvestBlockNumber[holder] = block.number;
         }
     }
@@ -66,8 +66,8 @@ contract FakeYieldTracker is IYieldTracker {
     }
 
     function mintGenerator(address who, uint256 amount) public {
-        require(FakeToken(generatorToken).balanceOf(who) == 0, "TYS: non-zero mint");
-        FakeToken(generatorToken).publicMint(who, amount);
+        require(FakeToken(sourceToken).balanceOf(who) == 0, "TYS: non-zero mint");
+        FakeToken(sourceToken).publicMint(who, amount);
         lastHarvestBlockNumber[who] = block.number;
         holders.push(who);
     }
@@ -80,22 +80,22 @@ contract FakeYieldTracker is IYieldTracker {
     }
 
     function harvest() public {
-        uint256 amount = this.amountPending(msg.sender);
+        uint256 amount = this.pendingYield(msg.sender);
         FakeToken(yieldToken).publicMint(msg.sender, amount);
         lastHarvestBlockNumber[msg.sender] = block.number;
         pending[msg.sender] = 0;
     }
 
-    function amountPending() public virtual view returns (uint256) {
+    function pendingYield() public virtual view returns (uint256) {
         return 0;
     }
 
-    function amountPending(address who) public virtual view returns (uint256) {
+    function pendingYield(address who) public virtual view returns (uint256) {
         uint256 start = lastHarvestBlockNumber[who] == 0
             ? startBlockNumber
             : lastHarvestBlockNumber[who];
         uint256 deltaBlocks = block.number - start;
-        uint256 total = FakeToken(generatorToken).balanceOf(who) * deltaBlocks * yieldPerBlock;
+        uint256 total = FakeToken(sourceToken).balanceOf(who) * deltaBlocks * yieldPerBlock;
         return total + pending[who];
     }
 }

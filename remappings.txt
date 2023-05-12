@@ -1,4 +1,6 @@
 y2k-earthquake/=lib/Earthquake/
-dlx/=lib/dlx-contracts/
 openzeppelin/=lib/openzeppelin-contracts/contracts/
 forge-std/=lib/forge-std/src/
+stargate/=lib/stargate/
+uniswap/=lib/uniswap/
+uniswap-periphery/=lib/uniswap-periphery/

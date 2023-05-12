@@ -53,7 +53,7 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
     YieldData public dataCredit;
     Discounter public discounter;
 
-    IERC20 public generatorToken;
+    IERC20 public sourceToken;
     IERC20 public yieldToken;
 
     UniswapV3LiquidityPool public pool;
@@ -79,13 +79,13 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         IERC20(WETH).transfer(address(source), wethAmount);
 
         /* DLXFakeYieldSource source = new DLXFakeYieldSource(200); */
-        FakeYieldOracle oracle = new FakeYieldOracle(address(source.generatorToken()),
+        FakeYieldOracle oracle = new FakeYieldOracle(address(source.sourceToken()),
                                                      address(source.yieldToken()),
                                                      200,
                                                      18);
 
         // TODO: fix import namespacing
-        address gtA = address(source.generatorToken());
+        address gtA = address(source.sourceToken());
         address ytA = address(source.yieldToken());
         IERC20 gt = IERC20(gtA);
         IERC20 yt = IERC20(ytA);
@@ -166,9 +166,9 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         assertEq(vault.cumulativeYield(), 3200e18);
         assertEq(vault.calculatePendingYield(user0), 800e18);
 
-        before = source.amountPending();
+        before = source.pendingYield();
         source.setYieldPerBlock(100);
-        assertEq(source.amountPending(), before);
+        assertEq(source.pendingYield(), before);
 
         vm.roll(block.number + 1);
         assertEq(vault.cumulativeYield(), 3400e18);
@@ -338,12 +338,12 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         depositDepeg();
 
         FakeYieldSource3 source = new FakeYieldSource3(200, WETH);
-        FakeYieldOracle oracle = new FakeYieldOracle(address(source.generatorToken()),
+        FakeYieldOracle oracle = new FakeYieldOracle(address(source.sourceToken()),
                                                      address(source.yieldToken()),
                                                      200,
                                                      18);
 
-        IERC20 gt = IERC20(source.generatorToken());
+        IERC20 gt = IERC20(source.sourceToken());
         IERC20 yt = IERC20(source.yieldToken());
         vm.startPrank(ADMIN);
         SelfInsuredVault vault = new SelfInsuredVault("Self Insured YS:G Vault",
@@ -482,11 +482,11 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         FakeYieldSource3 vaultSource = new FakeYieldSource3(200, WETH);
         IERC20(WETH).transfer(address(vaultSource), wethAmount);
 
-        FakeYieldOracle oracle = new FakeYieldOracle(address(vaultSource.generatorToken()),
+        FakeYieldOracle oracle = new FakeYieldOracle(address(vaultSource.sourceToken()),
                                                      address(vaultSource.yieldToken()),
                                                      200,
                                                      18);
-        generatorToken = IERC20(vaultSource.generatorToken());
+        sourceToken = IERC20(vaultSource.sourceToken());
         yieldToken = IERC20(vaultSource.yieldToken());
         vaultSource.mintBoth(ALICE, 10e18);
 
@@ -538,7 +538,7 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
 
         // Add liquidity
         vm.startPrank(ALICE);
-        generatorToken.approve(address(npvSwap), 1000e18);
+        sourceToken.approve(address(npvSwap), 1000e18);
         npvSwap.lockForNPV(ALICE, ALICE, 1000e18, 10e18, new bytes(0));
         uint256 token0Amount = 1e18;
         uint256 token1Amount = 1e18;
@@ -594,7 +594,7 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
 
         // Deposit into the vault
         vm.startPrank(ALICE);
-        generatorToken.approve(address(vault), 2e18);
+        sourceToken.approve(address(vault), 2e18);
         vault.deposit(2e18, ALICE);
         vm.stopPrank();
 
@@ -638,20 +638,20 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
 
         // Partial withdraw from the vault
         {
-            uint256 before = IERC20(generatorToken).balanceOf(ALICE);
+            uint256 before = IERC20(sourceToken).balanceOf(ALICE);
             vm.prank(ALICE);
             vault.withdraw(15e17, ALICE, ALICE);
-            uint256 delta = IERC20(generatorToken).balanceOf(ALICE) - before;
+            uint256 delta = IERC20(sourceToken).balanceOf(ALICE) - before;
             assertEq(delta, 15e17);
             assertEq(vault.balanceOf(ALICE), 5e17);
         }
 
         // Withdraw the rest
         {
-            uint256 before = IERC20(generatorToken).balanceOf(ALICE);
+            uint256 before = IERC20(sourceToken).balanceOf(ALICE);
             vm.prank(ALICE);
             vault.withdraw(5e17, ALICE, ALICE);
-            uint256 delta = IERC20(generatorToken).balanceOf(ALICE) - before;
+            uint256 delta = IERC20(sourceToken).balanceOf(ALICE) - before;
             assertEq(delta, 5e17);
             assertEq(vault.balanceOf(ALICE), 0);
         }

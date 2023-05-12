@@ -11,8 +11,7 @@ import {IERC20} from "openzeppelin/token/ERC20/IERC20.sol";
 import {SafeERC20} from "openzeppelin/token/ERC20/utils/SafeERC20.sol";
 import {ERC4626} from "openzeppelin/token/ERC20/extensions/ERC4626.sol";
 
-import {IYieldSource} from "dlx/src/interfaces/IYieldSource.sol";
-import {NPVSwap} from "dlx/src/core/NPVSwap.sol";
+import {IYieldSource} from "../interfaces/IYieldSource.sol";
 
 import {IYieldOracle} from "../interfaces/IYieldOracle.sol";
 import {ISelfInsuredVault} from "../interfaces/ISelfInsuredVault.sol";
@@ -112,20 +111,11 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC4626, Ownable {
     /// @notice Token to be paid in for insurance
     IERC20 public immutable paymentToken;
 
-    /// TODO: NOT USED!
-    uint256 lastRecordedEpochId;
-
-    /// TODO: gerneralize this
-    uint256 dlxId;
-
     /// @notice Yield source contract
     IYieldSource public immutable yieldSource;
 
     /// @notice Yield oracles
     IYieldOracle public oracle;
-
-    /// @notice Delorean swap contract TODO: generalize this
-    NPVSwap public dlxSwap;
 
     /// @notice Emitted when `user` claimed payout
     event ClaimPayouts(address indexed user, uint256 amount);
@@ -142,18 +132,16 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC4626, Ownable {
      * @param _paymentToken Token used for premium
      * @param _yieldSource Yield source contract address
      * @param _oracle Yield oracle contract address
-     * @param _dlxSwap Delorean swap contract
      */
     constructor(
         string memory _name,
         string memory _symbol,
         address _paymentToken,
         address _yieldSource,
-        address _oracle,
-        address _dlxSwap
+        address _oracle
     )
         ERC20(_name, _symbol)
-        ERC4626(IERC20(address(IYieldSource(_yieldSource).generatorToken())))
+        ERC4626(IERC20(address(IYieldSource(_yieldSource).sourceToken())))
     {
         require(_yieldSource != address(0), "SIV: zero source");
         /* require(oracle_ != address(0), "SIV: zero oracle"); */
@@ -161,7 +149,6 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC4626, Ownable {
         paymentToken = IERC20(_paymentToken);
         yieldSource = IYieldSource(_yieldSource);
         oracle = IYieldOracle(_oracle);
-        dlxSwap = NPVSwap(_dlxSwap);
         rewardTokens.push(address(IYieldSource(_yieldSource).yieldToken()));
     }
 
@@ -328,7 +315,7 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC4626, Ownable {
         super.deposit(assets, receiver);
         IERC20(asset()).safeApprove(address(yieldSource), 0);
         IERC20(asset()).safeApprove(address(yieldSource), assets);
-        yieldSource.deposit(assets, false);
+        yieldSource.deposit(assets);
 
         return assets;
     }
@@ -343,10 +330,7 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC4626, Ownable {
         address owner
     ) public override view returns (uint256 maxAssets) {
         uint256 balance = balanceOf(owner);
-        uint256 available = yieldSource.amountGenerator();
-        if (dlxId != 0 && dlxSwap.slice().remaining(dlxId) == 0) {
-            available += dlxSwap.slice().tokens(dlxId);
-        }
+        uint256 available = yieldSource.totalDeposit();
         return available < balance ? available : balance;
     }
 
@@ -366,8 +350,6 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC4626, Ownable {
             balanceOf(owner) >= assets,
             "SIV: withdraw insufficient balance"
         );
-
-        _unlockIfNeeded();
 
         _updateYield(owner, address(yieldSource.yieldToken()));
         _updateProviderEpochs(-int256(assets));
@@ -458,21 +440,9 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC4626, Ownable {
         // wait until the position repays itself, a function of the sum of weights,
         // yield rate, and epoch duration. If 10% of yield is devoted to insurance
         // purchase for 1 week epochs, it should take around 20% * 7 days = 1.4 days.
-        uint256 amountLock = yieldSource.amountGenerator() / 2;
-        yieldSource.withdraw(amountLock, false, address(this));
-        yieldSource.generatorToken().approve(address(dlxSwap), amountLock);
-
-        _unlockIfNeeded();
-        require(dlxId == 0, "SIV: active delorean position");
-        (uint256 id, uint256 actualOut) = dlxSwap.lockForYield(
-            address(this),
-            amountLock,
-            sum,
-            minOut,
-            0,
-            new bytes(0)
-        );
-        dlxId = id;
+        // TODO: configure ratio here!
+        uint256 totalYield = yieldSource.pendingYield();
+        (uint256 yieldAmount, uint256 actualOut) = yieldSource.harvestAndConvert(paymentToken, totalYield);
 
         // Purchase insurance via Y2K
         for (uint256 i = 0; i < providers.length; i++) {
@@ -541,7 +511,7 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC4626, Ownable {
         if (yieldToken == address(yieldSource.yieldToken())) {
             return
                 globalYieldInfos[yieldToken].harvestedYield +
-                yieldSource.amountPending();
+                yieldSource.pendingYield();
         } else {
             return (IERC20(yieldToken).balanceOf(address(this)) +
                 globalYieldInfos[yieldToken].claimedYield);
@@ -683,7 +653,7 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC4626, Ownable {
         IInsuranceProvider provider0 = providers[0];
         uint256 epochDuration = provider0.epochDuration();
         return
-            oracle.projectYield(yieldSource.amountGenerator(), epochDuration);
+            oracle.projectYield(yieldSource.totalDeposit(), epochDuration);
     }
 
     /**
@@ -691,8 +661,8 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC4626, Ownable {
      */
     function _harvest() internal {
         // Harvest the underlying in slot 0, which must be claimed
-        uint256 pending = yieldSource.amountPending();
-        yieldSource.harvest();
+        uint256 pending = yieldSource.pendingYield();
+        yieldSource.harvestAndConvert(paymentToken, 0);
         globalYieldInfos[address(yieldSource.yieldToken())]
             .harvestedYield += pending;
 
@@ -813,15 +783,5 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC4626, Ownable {
         IERC20(provider.paymentToken()).approve(address(provider), amount);
         provider.purchaseForNextEpoch(amount);
         epochInfo.premiumPaid = amount;
-    }
-
-    /**
-     * @notice Unlock dlx swap
-     */
-    function _unlockIfNeeded() internal {
-        if (dlxId == 0) return;
-        if (dlxSwap.slice().remaining(dlxId) != 0) return;
-        dlxSwap.slice().unlockDebtSlice(dlxId);
-        dlxId = 0;
     }
 }

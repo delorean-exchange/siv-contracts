@@ -34,7 +34,7 @@ contract FakeYieldSource is IYieldSource {
     uint256 public pending;
 
     address public _yieldToken;
-    IFakeToken public _generatorToken;
+    IFakeToken public _sourceToken;
     address[] public holders;
     address public owner;
     bool public isWeth;
@@ -50,7 +50,7 @@ contract FakeYieldSource is IYieldSource {
         } else {
             _yieldToken = address(new FakeToken("TestYS: fake ETH", "fakeETH", 0));
         }
-        _generatorToken = IFakeToken(new CallbackFakeToken("TestYS: fake GLP", "fakeGLP", 0, address(this)));
+        _sourceToken = IFakeToken(new CallbackFakeToken("TestYS: fake GLP", "fakeGLP", 0, address(this)));
     }
 
     function yieldToken() external override view returns (IERC20) {
@@ -61,12 +61,12 @@ contract FakeYieldSource is IYieldSource {
         _yieldToken = yieldToken_;
     }
 
-    function generatorToken() external override view returns (IERC20) {
-        return IERC20(_generatorToken);
+    function sourceToken() external override view returns (IERC20) {
+        return IERC20(_sourceToken);
     }
 
-    function setGeneratorToken(address generatorToken_) external {
-        _generatorToken = IFakeToken(generatorToken_);
+    function setsourceToken(address sourceToken_) external {
+        _sourceToken = IFakeToken(sourceToken_);
     }
 
     function callback(address who) public {
@@ -93,7 +93,7 @@ contract FakeYieldSource is IYieldSource {
     }
 
     function mintGenerator(address who, uint256 amount) public {
-        _generatorToken.publicMint(who, amount);
+        _sourceToken.publicMint(who, amount);
     }
 
     function mintYield(address who, uint256 amount) public {
@@ -106,7 +106,7 @@ contract FakeYieldSource is IYieldSource {
 
     function harvest() public override {
         assert(owner != address(this));
-        uint256 amount = this.amountPending();
+        uint256 amount = this.pendingYield();
         mintYield(address(this), amount);
         /* _yieldToken.publicMint(address(this), amount); */
         IERC20(_yieldToken).safeTransfer(owner, amount);
@@ -118,15 +118,15 @@ contract FakeYieldSource is IYieldSource {
     function _pendingUnaccounted() internal view returns (uint256) {
         uint256 start = lastPendingBlockNumber == 0 ? startBlockNumber : lastPendingBlockNumber;
         uint256 deltaBlocks = block.number - start;
-        return _generatorToken.balanceOf(address(this)) * deltaBlocks * yieldPerBlock;
+        return _sourceToken.balanceOf(address(this)) * deltaBlocks * yieldPerBlock;
     }
 
-    function amountPending() external override virtual view returns (uint256) {
+    function pendingYield() external override virtual view returns (uint256) {
         return _pendingUnaccounted() + pending;
     }
 
     function deposit(uint256 amount, bool claim) external override {
-        IERC20(_generatorToken).safeTransferFrom(msg.sender, address(this), amount);
+        IERC20(_sourceToken).safeTransferFrom(msg.sender, address(this), amount);
 
         if (claim) this.harvest();
     }
@@ -134,15 +134,15 @@ contract FakeYieldSource is IYieldSource {
     function withdraw(uint256 amount, bool claim, address to) external override {
         checkpointPending();
 
-        uint256 balance = _generatorToken.balanceOf(address(this));
+        uint256 balance = _sourceToken.balanceOf(address(this));
         if (amount > balance) {
             amount = balance;
         }
-        IERC20(_generatorToken).safeTransfer(to, amount);
+        IERC20(_sourceToken).safeTransfer(to, amount);
         if (claim) this.harvest();
     }
 
-    function amountGenerator() external override view returns (uint256) {
-        return _generatorToken.balanceOf(address(this));
+    function totalDeposit() external override view returns (uint256) {
+        return _sourceToken.balanceOf(address(this));
     }
 }

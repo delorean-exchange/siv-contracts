@@ -10,6 +10,12 @@
 	path = lib/Earthquake
 	url = https://github.com/Y2K-Finance/Earthquake
 	branch = fix_legacy_v1_test
-[submodule "lib/dlx-contracts"]
-	path = lib/dlx-contracts
-	url = https://github.com/delorean-exchange/dlx-contracts
+[submodule "lib/stargate"]
+	path = lib/stargate
+	url = https://github.com/stargate-protocol/stargate
+[submodule "lib/uniswap"]
+	path = lib/uniswap
+	url = https://github.com/Uniswap/v2-core.git
+[submodule "lib/uniswap-periphery"]
+	path = lib/uniswap-periphery
+	url = https://github.com/Uniswap/v2-periphery.git

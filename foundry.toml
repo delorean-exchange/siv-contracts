@@ -2,6 +2,7 @@
 src = 'src'
 out = 'out'
 libs = ['lib']
+test = 'mock'
 
 fs_permissions = [
 { access = 'read-write', path = './json' },

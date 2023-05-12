@@ -7,16 +7,16 @@ import { IYieldOracle } from "../../src/interfaces/IYieldOracle.sol";
 import { IERC20 } from "openzeppelin/token/ERC20/IERC20.sol";
 
 contract FakeYieldOracle is IYieldOracle {
-    IERC20 public override generatorToken;
+    IERC20 public override sourceToken;
     IERC20 public override yieldToken;
     uint256 public yieldPerSecond;
     uint256 public immutable decimals;
 
-    constructor(address generatorToken_,
+    constructor(address sourceToken_,
                 address yieldToken_,
                 uint256 yieldPerSecond_,
                 uint256 decimals_) {
-        generatorToken = IERC20(generatorToken_);
+        sourceToken = IERC20(sourceToken_);
         yieldToken = IERC20(yieldToken_);
         yieldPerSecond = yieldPerSecond_;
         decimals = decimals_;

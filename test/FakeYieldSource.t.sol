@@ -12,31 +12,31 @@ contract FakeYieldTrackerTest is BaseTest {
         FakeYieldTracker source = new FakeYieldTracker(200);
 
         address user0 = createTestUser(0);
-        assertEq(source.amountPending(user0), 0);
+        assertEq(source.pendingYield(user0), 0);
 
         source.mintGenerator(user0, 10);
-        assertEq(source.amountPending(user0), 0);
+        assertEq(source.pendingYield(user0), 0);
 
         vm.roll(block.number + 1);
-        assertEq(source.amountPending(user0), 2000);
+        assertEq(source.pendingYield(user0), 2000);
 
         vm.prank(user0);
         source.harvest();
-        assertEq(source.amountPending(user0), 0);
+        assertEq(source.pendingYield(user0), 0);
         assertEq(FakeToken(source.yieldToken()).balanceOf(user0), 2000);
 
         address user1 = createTestUser(1);
-        assertEq(source.amountPending(user1), 0);
+        assertEq(source.pendingYield(user1), 0);
 
         vm.roll(block.number + 1);
-        assertEq(source.amountPending(user1), 0);
+        assertEq(source.pendingYield(user1), 0);
 
         source.mintGenerator(user1, 50);
-        assertEq(source.amountPending(user1), 0);
+        assertEq(source.pendingYield(user1), 0);
 
         vm.roll(block.number + 1);
-        assertEq(source.amountPending(user0), 4000);
-        assertEq(source.amountPending(user1), 10000);
+        assertEq(source.pendingYield(user0), 4000);
+        assertEq(source.pendingYield(user1), 10000);
 
         vm.prank(user0);
         source.harvest();
@@ -54,31 +54,31 @@ contract FakeYieldTrackerTest is BaseTest {
 
         return;
 
-        assertEq(source.amountPending(user0), 0);
+        assertEq(source.pendingYield(user0), 0);
 
 
         source.mintGenerator(user0, 10);
-        assertEq(source.amountPending(user0), 0);
+        assertEq(source.pendingYield(user0), 0);
 
         vm.roll(block.number + 1);
-        assertEq(source.amountPending(user0), 2000);
+        assertEq(source.pendingYield(user0), 2000);
 
         vm.roll(block.number + 1);
-        assertEq(source.amountPending(user0), 4000);
+        assertEq(source.pendingYield(user0), 4000);
 
         source.setYieldPerBlock(100);
-        assertEq(source.amountPending(user0), 4000);
+        assertEq(source.pendingYield(user0), 4000);
 
         vm.roll(block.number + 1);
-        assertEq(source.amountPending(user0), 5000);
+        assertEq(source.pendingYield(user0), 5000);
 
         address user1 = createTestUser(1);
         source.mintGenerator(user1, 30);
-        assertEq(source.amountPending(user1), 0);
+        assertEq(source.pendingYield(user1), 0);
 
         vm.roll(block.number + 1);
-        assertEq(source.amountPending(user0), 6000);
-        assertEq(source.amountPending(user1), 3000);
+        assertEq(source.pendingYield(user0), 6000);
+        assertEq(source.pendingYield(user1), 3000);
 
         vm.prank(user0);
         source.harvest();
