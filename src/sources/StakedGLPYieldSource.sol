@@ -7,14 +7,14 @@ import { SafeERC20 } from "openzeppelin/token/ERC20/utils/SafeERC20.sol";
 import { IERC20 } from "openzeppelin/token/ERC20/IERC20.sol";
 
 import { IYieldSource } from "../interfaces/IYieldSource.sol";
-import { IGLPRewardTracker } from "../interfaces/IGLPRewardTracker.sol";
+import { IRewardTracker } from "../interfaces/gmx/IRewardTracker.sol";
 
 contract StakedGLPYieldSource is IYieldSource {
     using SafeERC20 for IERC20;
 
     IERC20 public immutable override generatorToken;
     IERC20 public immutable override yieldToken;
-    IGLPRewardTracker public immutable tracker;
+    IRewardTracker public immutable tracker;
     uint256 public deposits;
     address public owner;
 
@@ -26,7 +26,7 @@ contract StakedGLPYieldSource is IYieldSource {
         owner = msg.sender;
         generatorToken = IERC20(stglp_);
         yieldToken = IERC20(weth_);
-        tracker = IGLPRewardTracker(tracker_);
+        tracker = IRewardTracker(tracker_);
     }
 
     function setOwner(address owner_) external override {
