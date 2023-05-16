@@ -12,11 +12,9 @@ import { SafeERC20 } from "openzeppelin/token/ERC20/utils/SafeERC20.sol";
 import { IYieldSource } from "dlx/src/interfaces/IYieldSource.sol";
 import { NPVSwap } from "dlx/src/core/NPVSwap.sol";
 
-import { IYieldOracle } from "../interfaces/IYieldOracle.sol";
-import { ISelfInsuredVault } from "../interfaces/ISelfInsuredVault.sol";
 import { IInsuranceProvider } from "../interfaces/IInsuranceProvider.sol";
 
-contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
+contract SelfInsuredVault is ERC20 {
     using SafeERC20 for IERC20;
 
     event Deposit(address indexed sender,
@@ -111,7 +109,6 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
     uint256 dlxId;
 
     IYieldSource public immutable yieldSource;
-    IYieldOracle public oracle;
     NPVSwap public dlxSwap;
 
     modifier onlyAdmin {
@@ -123,16 +120,13 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
                 string memory symbol_,
                 address paymentToken_,
                 address yieldSource_,
-                address oracle_,
                 address dlxSwap_) ERC20(name_, symbol_) {
         require(yieldSource_ != address(0), "SIV: zero source");
-        /* require(oracle_ != address(0), "SIV: zero oracle"); */
 
         admin = msg.sender;
 
         paymentToken = IERC20(paymentToken_);
         yieldSource = IYieldSource(yieldSource_);
-        oracle = IYieldOracle(oracle_);
         dlxSwap = NPVSwap(dlxSwap_);
         rewardTokens = new address[](1);
         rewardTokens[0] = address(IYieldSource(yieldSource_).yieldToken());
@@ -152,10 +146,6 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
 
     function rewardTokensLength() public view returns (uint256) {
         return rewardTokens.length;
-    }
-
-    function setOracle(address oracle_) external onlyAdmin {
-        oracle = IYieldOracle(oracle_);
     }
 
     // -- ERC4642: Asset -- //
@@ -523,6 +513,12 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
         admin = admin_;
     }
 
+    function setDeloreanSwap(address dlxSwap_) external onlyAdmin {
+        _unlockIfNeeded();
+        require(dlxId == 0, "SIV: non zero dlx id");
+        dlxSwap = NPVSwap(dlxSwap_);
+    }
+
     function addRewardToken(address rewardToken) external onlyAdmin {
         require(rewardToken != address(0), "SIV: zero reward token");
         rewardTokens.push(rewardToken);
@@ -556,13 +552,6 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
         require(sum < MAX_COMBINED_WEIGHT, "SIV: max weight");
 
         weights[index] = weight_;
-    }
-
-    function _projectEpochYield() internal returns (uint256) {
-        // Assume all providers have same epoch duration, this is asserted elsewhere
-        IInsuranceProvider provider0 = providers[0];
-        uint256 epochDuration = provider0.epochDuration();
-        return oracle.projectYield(yieldSource.amountGenerator(), epochDuration);
     }
 
     function pendingInsurancePayouts() external view returns (uint256) {
@@ -613,13 +602,11 @@ contract SelfInsuredVault is ISelfInsuredVault, ERC20 {
     }
 
     // `minBps` is the minimum yield fronted from Delorean, in terms of basis points.
-    function purchaseInsuranceForNextEpoch(uint256 minBps, uint256 projectedYield) external onlyAdmin {
-        /* uint256 projectedYield = _projectEpochYield(); */
-
+    function purchaseInsuranceForNextEpoch(uint256 minBps, uint256 epochProjectedYield) external onlyAdmin {
         // Get epoch's yield upfront via Delorean
         uint256 sum = 0;
         for (uint256 i = 0; i < weights.length; i++) {
-            sum += (projectedYield * weights[i]) / WEIGHTS_PRECISION;
+            sum += (epochProjectedYield * weights[i]) / WEIGHTS_PRECISION;
         }
         uint256 minOut = (sum * minBps) / 100_00;
 

@@ -37,7 +37,6 @@ import { NPVSwap } from  "dlx/src/core/NPVSwap.sol";
 import { Discounter } from "dlx/src/data/Discounter.sol";
 import { YieldData } from "dlx/src/data/YieldData.sol";
 
-/* contract SelfInsuredVaultTest is BaseTest, DLXBaseTest, ControllerHelper { */
 contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
     // From https://docs.uniswap.org/contracts/v3/reference/deployments
     address public arbitrumUniswapV3Factory = 0x1F98431c8aD98523631AE4a59f267346ea31F984;
@@ -94,7 +93,6 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
                                                       "siYS:G",
                                                       address(source.yieldToken()),
                                                       address(source),
-                                                      address(oracle),
                                                       address(0));
         source.setOwner(address(vault));
 
@@ -338,10 +336,6 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         depositDepeg();
 
         FakeYieldSource3 source = new FakeYieldSource3(200, WETH);
-        FakeYieldOracle oracle = new FakeYieldOracle(address(source.generatorToken()),
-                                                     address(source.yieldToken()),
-                                                     200,
-                                                     18);
 
         IERC20 gt = IERC20(source.generatorToken());
         IERC20 yt = IERC20(source.yieldToken());
@@ -350,7 +344,6 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
                                                       "siYS:G",
                                                       address(source.yieldToken()),
                                                       address(source),
-                                                      address(oracle),
                                                       address(0));
 
         // Set up Y2K insurance vault
@@ -482,10 +475,6 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         FakeYieldSource3 vaultSource = new FakeYieldSource3(200, WETH);
         IERC20(WETH).transfer(address(vaultSource), wethAmount);
 
-        FakeYieldOracle oracle = new FakeYieldOracle(address(vaultSource.generatorToken()),
-                                                     address(vaultSource.yieldToken()),
-                                                     200,
-                                                     18);
         generatorToken = IERC20(vaultSource.generatorToken());
         yieldToken = IERC20(vaultSource.yieldToken());
         vaultSource.mintBoth(ALICE, 10e18);
@@ -534,7 +523,7 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
             IUniswapV3Pool(uniswapV3Pool).initialize(79228162514264337593543950336);
         }
         pool = new UniswapV3LiquidityPool(address(uniswapV3Pool), arbitrumSwapRouter, arbitrumQuoterV2);
-        npvSwap = new NPVSwap(address(npvToken), address(slice), address(pool));
+        npvSwap = new NPVSwap(address(slice), address(pool));
 
         // Add liquidity
         vm.startPrank(ALICE);
@@ -570,7 +559,6 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
                                                       "siYS:G",
                                                       address(vaultSource.yieldToken()),
                                                       address(vaultSource),
-                                                      address(oracle),
                                                       address(npvSwap));
         vm.stopPrank();
 
