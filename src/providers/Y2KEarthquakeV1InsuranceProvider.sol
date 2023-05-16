@@ -41,15 +41,11 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
 
         // TOOD: GAS: probably don't need a loop here
         int256 len = int256(vault.epochsLength());
-        /* console.log("Len is:", uint256(len)); */
         for (int256 i = len - 1; i >= 0 && i > len - 3; i--) {
-            /* console.log("CE i:", uint256(i)); */
             uint256 epochId = vault.epochs(uint256(i));
-            /* console.log(": ->", epochId); */
 
-        /*     // TODO: verify that if current epoch is manually ended, this will still work */
+            // TODO: verify that if current epoch is manually ended, this will still work
             if (block.timestamp > vault.idEpochBegin(epochId) && !vault.idEpochEnded(epochId)) {
-                /* console.log("Return ->", epochId); */
                 return epochId;
             }
         }
