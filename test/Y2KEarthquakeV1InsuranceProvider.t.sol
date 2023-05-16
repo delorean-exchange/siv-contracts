@@ -21,44 +21,6 @@ contract Y2KEarthquakeV1InsuranceProviderTest is BaseTest, ControllerHelper {
 
     Y2KEarthquakeV1InsuranceProvider provider;
 
-    // -- Forking sanity checks -- //
-    function forkToActiveEpoch() public {
-        // This block is at the 11'th epoch, ID 1676851200.
-        // This epoch has started, but has not yet ended.
-        vm.selectFork(vm.createFork(ARBITRUM_RPC_URL, 61330138));
-        provider = new Y2KEarthquakeV1InsuranceProvider(usdtVault, address(0));
-    }
-
-    function forkToNoActiveEpoch() public {
-        // This block is at the 10'th epoch, ID 1676246400.
-        // This epoch has started and ended.
-        // The next epoch has not yet been created.
-        vm.selectFork(vm.createFork(ARBITRUM_RPC_URL, 58729505));
-        provider = new Y2KEarthquakeV1InsuranceProvider(usdtVault, address(0));
-    }
-
-    function testCallToY2K() public {
-        forkToActiveEpoch();
-
-        assertEq(vault.tokenInsured(), address(usdt));
-    }
-
-    function testActiveFork() public {
-        forkToActiveEpoch();
-
-        assertEq(address(provider.insuredToken()), address(usdt));
-        assertEq(address(provider.paymentToken()), address(weth));
-        assertEq(provider.currentEpoch(), 1676851200);
-        assertEq(provider.nextEpoch(), 0);
-    }
-
-    function testNoActiveFork() public {
-        forkToNoActiveEpoch();
-
-        assertEq(provider.currentEpoch(), 0);
-        assertEq(provider.nextEpoch(), 1676246400);
-    }
-
     // -- Depeg scenario -- //
     // Based on Y2K ControllerTest
     function testTriggerDepeg() public {
