@@ -65,6 +65,7 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
     IERC20 yt;
     FakeYieldSource source;
     SelfInsuredVault vault;
+    Y2KEarthquakeV1InsuranceProvider provider;
 
     function epochPayout(SelfInsuredVault vault, address provider, uint256 index) internal view returns (uint256) {
         ( , , uint256 payout, ) = vault.providerEpochs(provider, index);
@@ -72,7 +73,7 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
     }
 
     function setUpVault() public {
-        vm.selectFork(vm.createFork(ARBITRUM_RPC_URL));
+        /* vm.selectFork(vm.createFork(ARBITRUM_RPC_URL)); */
 
         uint256 wethAmount = 1000000e18;
         vm.deal(address(this), wethAmount);
@@ -89,6 +90,25 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
                                                       address(source),
                                                       address(0));
         source.setOwner(address(vault));
+    }
+
+    function setUpY2K() public {
+        // Set up Y2K insurance vault
+        vm.startPrank(ADMIN);
+        vaultFactory.createNewMarket(FEE, TOKEN_FRAX, DEPEG_AAA, beginEpoch, endEpoch, ORACLE_FRAX, "y2kFRAX_99*");
+
+        hedge = vaultFactory.getVaults(1)[0];
+        risk = vaultFactory.getVaults(1)[1];
+
+        vHedge = Vault(hedge);
+        vRisk = Vault(risk);
+        vm.stopPrank();
+
+        // Set up the insurance provider
+        provider = new Y2KEarthquakeV1InsuranceProvider(address(vHedge), address(vault));
+
+        // Set the insurance provider at 10% of expected yield
+        vault.addInsuranceProvider(IInsuranceProvider(provider), 10_00);
     }
 
     function testYieldAccounting() public {
@@ -332,34 +352,10 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
 
     function testDepegYieldAccounting() public {
         depositDepeg();
+        setUpVault();
+        setUpY2K();
 
-        FakeYieldSource source = new FakeYieldSource(200, WETH);
-
-        IERC20 gt = IERC20(source.generatorToken());
-        IERC20 yt = IERC20(source.yieldToken());
-        vm.startPrank(ADMIN);
-        SelfInsuredVault vault = new SelfInsuredVault("Self Insured YS:G Vault",
-                                                      "siYS:G",
-                                                      address(source.yieldToken()),
-                                                      address(source),
-                                                      address(0));
-
-        // Set up Y2K insurance vault
-        vaultFactory.createNewMarket(FEE, TOKEN_FRAX, DEPEG_AAA, beginEpoch, endEpoch, ORACLE_FRAX, "y2kFRAX_99*");
-
-        hedge = vaultFactory.getVaults(1)[0];
-        risk = vaultFactory.getVaults(1)[1];
-
-        vHedge = Vault(hedge);
-        vRisk = Vault(risk);
-
-        // Set up the insurance provider
-        Y2KEarthquakeV1InsuranceProvider provider;
-        provider = new Y2KEarthquakeV1InsuranceProvider(address(vHedge), address(vault));
-
-        // Set the insurance provider at 10% of expected yield
-        vault.addInsuranceProvider(IInsuranceProvider(provider), 10_00);
-        vm.stopPrank();  // ADMIN
+        vault.setAdmin(ADMIN);
 
         // Alice deposits into self insured vault
         source.mintGenerator(ALICE, 10e18);
