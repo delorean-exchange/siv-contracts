@@ -8,8 +8,6 @@ import { NPVSwap } from  "dlx/src/core/NPVSwap.sol";
 import { YieldSlice } from  "dlx/src/core/YieldSlice.sol";
 import { IYieldSource } from  "dlx/src/interfaces/IYieldSource.sol";
 
-import { FakeYieldOracle } from "../test/helpers/FakeYieldOracle.sol";
-
 import { VaultFactory, TimeLock } from "y2k-earthquake/src/VaultFactory.sol";
 import { FakeOracle } from "y2k-earthquake/test/oracles/FakeOracle.sol";
 import { Controller } from "y2k-earthquake/src/Controller.sol"; 
@@ -60,11 +58,6 @@ contract DeployFakeSelfInsuredVaultScript is BaseScript {
 
         IYieldSource vaultSource = YieldSlice(npvSwap.slice()).yieldSource();
 
-        FakeYieldOracle yieldOracle = new FakeYieldOracle(address(vaultSource.generatorToken()),
-                                                     address(vaultSource.yieldToken()),
-                                                     200,
-                                                     18);
-
         vaultFactory = new VaultFactory(deployerAddress,
                                         arbitrumWeth,
                                         deployerAddress);
@@ -91,7 +84,6 @@ contract DeployFakeSelfInsuredVaultScript is BaseScript {
                                      "sivFakeGLP",
                                      address(vaultSource.yieldToken()),
                                      address(vaultSource),
-                                     address(yieldOracle),
                                      address(npvSwap));
 
         provider = new Y2KEarthquakeV1InsuranceProvider(address(vHedge), address(vault));
