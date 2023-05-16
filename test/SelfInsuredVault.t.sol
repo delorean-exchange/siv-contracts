@@ -61,32 +61,38 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
 
     IRewardTracker public gmxRewardsTracker = IRewardTracker(0x4e971a87900b931fF39d1Aad67697F49835400b6);
 
+    IERC20 gt;
+    IERC20 yt;
+    FakeYieldSource source;
+    SelfInsuredVault vault;
+
     function epochPayout(SelfInsuredVault vault, address provider, uint256 index) internal view returns (uint256) {
         ( , , uint256 payout, ) = vault.providerEpochs(provider, index);
         return payout;
     }
 
-    function testYieldAccounting() public {
+    function setUpVault() public {
         vm.selectFork(vm.createFork(ARBITRUM_RPC_URL));
 
         uint256 wethAmount = 1000000e18;
         vm.deal(address(this), wethAmount);
         IWrappedETH(WETH).deposit{value: wethAmount}();
-        FakeYieldSource source = new FakeYieldSource(200, WETH);
+        source = new FakeYieldSource(200, WETH);
         IERC20(WETH).transfer(address(source), wethAmount);
 
-        // TODO: fix import namespacing
-        address gtA = address(source.generatorToken());
-        address ytA = address(source.yieldToken());
-        IERC20 gt = IERC20(gtA);
-        IERC20 yt = IERC20(ytA);
+        gt = source.generatorToken();
+        yt = source.yieldToken();
 
-        SelfInsuredVault vault = new SelfInsuredVault("Self Insured YS:G Vault",
+        vault = new SelfInsuredVault("Self Insured YS:G Vault",
                                                       "siYS:G",
                                                       address(source.yieldToken()),
                                                       address(source),
                                                       address(0));
         source.setOwner(address(vault));
+    }
+
+    function testYieldAccounting() public {
+        setUpVault();
 
         uint256 before;
         address user0 = createTestUser(0);
@@ -637,5 +643,15 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         }
 
         vault.pprintEpochs();
+    }
+
+    function testDoubleAddRewardToken() public {
+        setUpVault();
+
+        FakeToken it = new FakeToken("Incentives", "INC", 100e18);
+        vault.addRewardToken(address(it));
+
+        vm.expectRevert("SIV: duplicate reward token");
+        vault.addRewardToken(address(it));
     }
 }
