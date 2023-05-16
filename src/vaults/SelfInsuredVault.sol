@@ -533,6 +533,10 @@ contract SelfInsuredVault is ERC20 {
         require(provider_.paymentToken() == paymentToken, "SIV: payment token");
         require(providers.length < MAX_PROVIDERS, "SIV: max providers");
 
+        for (uint256 i = 0; i < providers.length; i++) {
+            require(address(providers[i]) != address(provider_), "SIV: duplicate provider");
+        }
+
         uint256 sum = weight_;
         for (uint256 i = 0; i < weights.length; i++) {
             sum += weights[i];

@@ -650,4 +650,12 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         vm.expectRevert("SIV: duplicate reward token");
         vault.addRewardToken(address(it));
     }
+
+    function testDoubleAddProvider() public {
+        setUpVault();
+        setUpY2K();
+
+        vm.expectRevert("SIV: duplicate provider");
+        vault.addInsuranceProvider(IInsuranceProvider(provider), 0);
+    }
 }
