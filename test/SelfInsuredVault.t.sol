@@ -5,17 +5,8 @@ import "forge-std/console.sol";
 
 import { IERC20 } from "openzeppelin/token/ERC20/IERC20.sol";
 
-import { ControllerHelper } from "y2k-earthquake/test/ControllerHelper.sol";
-import { Vault } from "y2k-earthquake/src/Vault.sol";
-import { VaultFactory, TimeLock} from "y2k-earthquake/src/VaultFactory.sol";
-import { Controller } from "y2k-earthquake/src/Controller.sol"; 
-import { FakeOracle } from "y2k-earthquake/test/oracles/FakeOracle.sol";
-
 import { BaseTest } from "./BaseTest.sol";
-import { BaseTest as DLXBaseTest } from "dlx/test/BaseTest.sol";
-import { FakeYieldSource as DLXFakeYieldSource } from "dlx/test/helpers/FakeYieldSource.sol";
-import { FakeYieldSource as FakeYieldSource3 } from "./helpers/FakeYieldSource3.sol";
-import { FakeYieldTracker } from "./helpers/FakeYieldTracker.sol";
+import { FakeYieldSource } from "./helpers/FakeYieldSource.sol";
 import { FakeYieldOracle } from "./helpers/FakeYieldOracle.sol";
 import { FakeToken } from "./helpers/FakeToken.sol";
 
@@ -25,8 +16,14 @@ import { IInsuranceProvider } from "../src/interfaces/IInsuranceProvider.sol";
 import { SelfInsuredVault } from "../src/vaults/SelfInsuredVault.sol";
 import { Y2KEarthquakeV1InsuranceProvider } from "../src/providers/Y2KEarthquakeV1InsuranceProvider.sol";
 
-// Delorean imports
+// Y2K imports
+import { ControllerHelper } from "y2k-earthquake/test/ControllerHelper.sol";
+import { Vault } from "y2k-earthquake/src/Vault.sol";
+import { VaultFactory, TimeLock} from "y2k-earthquake/src/VaultFactory.sol";
+import { Controller } from "y2k-earthquake/src/Controller.sol"; 
+import { FakeOracle } from "y2k-earthquake/test/oracles/FakeOracle.sol";
 
+// Delorean imports
 import { UniswapV3LiquidityPool } from "dlx/src/liquidity/UniswapV3LiquidityPool.sol";
 import { IUniswapV3Pool } from "dlx/src/interfaces/uniswap/IUniswapV3Pool.sol";
 import { INonfungiblePositionManager } from "dlx/src/interfaces/uniswap/INonfungiblePositionManager.sol";
@@ -38,6 +35,7 @@ import { Discounter } from "dlx/src/data/Discounter.sol";
 import { YieldData } from "dlx/src/data/YieldData.sol";
 
 contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
+
     // From https://docs.uniswap.org/contracts/v3/reference/deployments
     address public arbitrumUniswapV3Factory = 0x1F98431c8aD98523631AE4a59f267346ea31F984;
     address public arbitrumNonfungiblePositionManager = 0xC36442b4a4522E871399CD717aBDD847Ab11FE88;
@@ -74,14 +72,8 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         uint256 wethAmount = 1000000e18;
         vm.deal(address(this), wethAmount);
         IWrappedETH(WETH).deposit{value: wethAmount}();
-        FakeYieldSource3 source = new FakeYieldSource3(200, WETH);
+        FakeYieldSource source = new FakeYieldSource(200, WETH);
         IERC20(WETH).transfer(address(source), wethAmount);
-
-        /* DLXFakeYieldSource source = new DLXFakeYieldSource(200); */
-        FakeYieldOracle oracle = new FakeYieldOracle(address(source.generatorToken()),
-                                                     address(source.yieldToken()),
-                                                     200,
-                                                     18);
 
         // TODO: fix import namespacing
         address gtA = address(source.generatorToken());
@@ -335,7 +327,7 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
     function testDepegYieldAccounting() public {
         depositDepeg();
 
-        FakeYieldSource3 source = new FakeYieldSource3(200, WETH);
+        FakeYieldSource source = new FakeYieldSource(200, WETH);
 
         IERC20 gt = IERC20(source.generatorToken());
         IERC20 yt = IERC20(source.yieldToken());
@@ -472,7 +464,7 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         vm.deal(address(this), wethAmount);
         IWrappedETH(WETH).deposit{value: wethAmount}();
 
-        FakeYieldSource3 vaultSource = new FakeYieldSource3(200, WETH);
+        FakeYieldSource vaultSource = new FakeYieldSource(200, WETH);
         IERC20(WETH).transfer(address(vaultSource), wethAmount);
 
         generatorToken = IERC20(vaultSource.generatorToken());
@@ -494,7 +486,7 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         YieldData dataCredit = new YieldData(20);
         Discounter discounter = new Discounter(1e13, 500, 360, 18);
 
-        FakeYieldSource3 dlxSource = vaultSource;
+        FakeYieldSource dlxSource = vaultSource;
         slice = new YieldSlice("npvETH-FAKE",
                                address(dlxSource),
                                address(dataDebt),

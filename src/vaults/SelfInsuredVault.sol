@@ -521,6 +521,9 @@ contract SelfInsuredVault is ERC20 {
 
     function addRewardToken(address rewardToken) external onlyAdmin {
         require(rewardToken != address(0), "SIV: zero reward token");
+        for (uint256 i = 0; i < rewardTokens.length; i++) {
+            require(rewardTokens[i] != rewardToken, "SIV: duplicate reward token");
+        }
         rewardTokens.push(rewardToken);
     }
 
