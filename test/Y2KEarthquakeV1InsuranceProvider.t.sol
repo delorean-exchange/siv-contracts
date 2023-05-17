@@ -53,7 +53,7 @@ contract Y2KEarthquakeV1InsuranceProviderTest is BaseTest, ControllerHelper {
 
         uint256 pending = provider.pendingPayouts();
         uint256 before = IERC20(weth).balanceOf(user0);
-        uint256 result = provider.claimPayouts();
+        uint256 result = provider.claimPayouts(provider.vault().epochs(0));
         uint256 delta = IERC20(weth).balanceOf(user0) - before;
 
         console.log("Weth is:", address(weth));
@@ -135,7 +135,7 @@ contract Y2KEarthquakeV1InsuranceProviderTest is BaseTest, ControllerHelper {
 
         uint256 pending = provider.pendingPayouts();
         uint256 before = IERC20(weth).balanceOf(user0);
-        uint256 result = provider.claimPayouts();
+        uint256 result = provider.claimPayouts(provider.vault().epochs(0));
         uint256 delta = IERC20(weth).balanceOf(user0) - before;
 
         assertEq(pending, 0);

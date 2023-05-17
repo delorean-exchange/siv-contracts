@@ -99,7 +99,7 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
         return vault.balanceOf(address(this), _currentEpoch());
     }
 
-    function purchaseForNextEpoch(uint256 amountPremium) external override {
+    function purchaseForNextEpoch(uint256 amountPremium) external onlyOwner override {
         paymentToken.safeTransferFrom(msg.sender, address(this), amountPremium);
         paymentToken.safeApprove(address(vault), amountPremium);
         vault.deposit(_nextEpoch(), amountPremium, address(this));
@@ -128,22 +128,18 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
     }
 
     function _claimPayoutForEpoch(uint256 epochId) internal returns (uint256) {
-        uint256 assets = vault.balanceOf(address(this), epochId);
-        uint256 amount = vault.withdraw(epochId, assets, address(this), address(this));
-        claimedEpochIndex = vault.epochsLength();
+        uint256 amount = vault.withdraw(epochId,
+                                        vault.balanceOf(address(this), epochId),
+                                        address(this),
+                                        address(this));
         return amount;
     }
 
-    function claimPayouts() external override returns (uint256) {
-        uint256 amount = 0;
-        uint256 len = vault.epochsLength();
-        // TODO: Double check this logic, as it may not be 100% right.
-        // Does it correctly handle the current epoch?
-        for (uint256 i = claimedEpochIndex; i < len; i++) {
-            amount += _claimPayoutForEpoch(vault.epochs(i));
-        }
-
+    function claimPayouts(uint256 epochId) external override onlyOwner returns (uint256) {
+        require(epochId == vault.epochs(claimedEpochIndex), "YEIP: must claim sequentially");
+        uint256 amount = _claimPayoutForEpoch(epochId);
         paymentToken.safeTransfer(beneficiary, amount);
+        claimedEpochIndex++;
         return amount;
     }
 
@@ -151,7 +147,7 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
         return 0;
     }
 
-    function claimRewards() external override returns (uint256) {
+    function claimRewards() external override onlyOwner returns (uint256) {
         return 0;
     }
 }

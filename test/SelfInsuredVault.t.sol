@@ -548,6 +548,7 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
 
         // -- Delorean setup complete -- //
 
+
         vm.startPrank(ADMIN);
         SelfInsuredVault vault = new SelfInsuredVault("Self Insured YS:G Vault",
                                                       "siYS:G",
@@ -557,8 +558,9 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         vm.stopPrank();
 
         // Set up the insurance provider
-        Y2KEarthquakeV1InsuranceProvider provider = new Y2KEarthquakeV1InsuranceProvider(address(vHedge),
-                                                                                         address(vault));
+        Y2KEarthquakeV1InsuranceProvider provider;
+        provider = new Y2KEarthquakeV1InsuranceProvider(address(vHedge), address(vault));
+        provider.transferOwnership(address(vault));
 
         // Bob buys the risk
         vm.startPrank(BOB);

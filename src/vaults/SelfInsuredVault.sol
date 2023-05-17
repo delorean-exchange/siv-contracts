@@ -72,7 +72,7 @@ contract SelfInsuredVault is ERC20 {
         uint256 premiumPaid;  // If zero, insurance has not yet been purchased
     }
     mapping(address => EpochInfo[]) public providerEpochs;
-
+    uint256 public claimedPayoutsIndex = 0;
 
     // -- Yield & rewards accounting -- //
     struct GlobalYieldInfo {
@@ -570,16 +570,23 @@ contract SelfInsuredVault is ERC20 {
     }
 
     function claimVaultPayouts() external {
+        if (providers.length == 0) return;
+
+        uint256 j;
         for (uint256 i = 0; i < providers.length; i++) {
-            IERC20 pt = providers[i].paymentToken();
-            uint256 before = pt.balanceOf(address(this));
-            uint256 amount = providers[i].claimPayouts();
-            assert(amount == pt.balanceOf(address(this)) - before);
-            if (amount > 0) {
-                EpochInfo[] storage infos = providerEpochs[address(providers[i])];
-                infos[infos.length - 1].payout += amount;
+            address provider = address(providers[i]);
+
+            for (j = claimedPayoutsIndex; j < providerEpochs[provider].length; j++) {
+                uint256 epochId = providerEpochs[provider][j].epochId;
+                uint256 amount = providers[i].claimPayouts(epochId);
+                providerEpochs[provider][j].payout += amount;
             }
         }
+
+        claimedPayoutsIndex = j;
+    }
+
+    function _claimVaultPayoutsProviderEpoch(uint256 providerIndex, uint256 epochId) public returns (uint256) {
     }
 
     function _purchaseForNextEpoch(uint256 i, uint256 amount) internal {
