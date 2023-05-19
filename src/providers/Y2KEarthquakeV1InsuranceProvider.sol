@@ -39,13 +39,14 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
     function _currentEpoch() internal view returns (uint256) {
         if (vault.epochsLength() == 0) return 0;
 
-        // TOOD: GAS: probably don't need a loop here
         int256 len = int256(vault.epochsLength());
-        for (int256 i = len - 1; i >= 0 && i > len - 3; i--) {
+        /* console.log("LEN IS", uint256(len)); */
+        for (int256 i = len - 1; i >= 0 && i > len - 4; i--) {
             uint256 epochId = vault.epochs(uint256(i));
+            /* console.log("Check if this epoch is current one:", uint256(i), epochId, block.timestamp); */
+            /* console.log("- TS > begin?", block.timestamp > vault.idEpochBegin(epochId)); */
 
-            // TODO: verify that if current epoch is manually ended, this will still work
-            if (block.timestamp > vault.idEpochBegin(epochId) && !vault.idEpochEnded(epochId)) {
+            if (block.timestamp > vault.idEpochBegin(epochId)) {
                 return epochId;
             }
         }
@@ -59,16 +60,12 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
 
     function _nextEpoch() internal view returns (uint256) {
         uint256 len = vault.epochsLength();
+        console.log("LEN", len);
         if (len == 0) return 0;
-        uint256 epochId = vault.epochs(len - 1);
-        // TODO: should we handle the sitaution where there are two epochs at the end,
-        // both of which are not started? it is unlikely but may happen if there is a
-        // misconfiguration on Y2K side
-        if (block.timestamp > vault.idEpochBegin(epochId)) return 0;
-        return epochId;
+        return followingEpoch(_currentEpoch());
     }
 
-    function followingEpoch(uint256 epochId) external view returns (uint256) {
+    function followingEpoch(uint256 epochId) public view returns (uint256) {
         for (uint256 i = 1; i < vault.epochsLength(); i++) {
             if (vault.epochs(i - 1) == epochId) {
                 return vault.epochs(i);
@@ -102,6 +99,9 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
     function purchaseForNextEpoch(uint256 amountPremium) external onlyOwner override {
         paymentToken.safeTransferFrom(msg.sender, address(this), amountPremium);
         paymentToken.safeApprove(address(vault), amountPremium);
+
+        console.log("====> purchase for:", _nextEpoch());
+
         vault.deposit(_nextEpoch(), amountPremium, address(this));
     }
 
@@ -128,6 +128,8 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
     }
 
     function _claimPayoutForEpoch(uint256 epochId) internal returns (uint256) {
+        if (vault.balanceOf(address(this), epochId) == 0) return 0;
+
         uint256 amount = vault.withdraw(epochId,
                                         vault.balanceOf(address(this), epochId),
                                         address(this),
@@ -137,8 +139,12 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
 
     function claimPayouts(uint256 epochId) external override onlyOwner returns (uint256) {
         require(epochId == vault.epochs(claimedEpochIndex), "YEIP: must claim sequentially");
+
+        console.log("claiming payouts for", epochId);
+        console.log("is it in the past?  ", epochId < block.timestamp);
+
         uint256 amount = _claimPayoutForEpoch(epochId);
-        paymentToken.safeTransfer(beneficiary, amount);
+        if (amount > 0) paymentToken.safeTransfer(beneficiary, amount);
         claimedEpochIndex++;
         return amount;
     }

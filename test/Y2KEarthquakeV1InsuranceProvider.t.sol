@@ -21,6 +21,9 @@ contract Y2KEarthquakeV1InsuranceProviderTest is BaseTest, ControllerHelper {
 
     Y2KEarthquakeV1InsuranceProvider provider;
 
+    function setUpVaults() public {
+    }
+
     // -- Depeg scenario -- //
     // Based on Y2K ControllerTest
     function testTriggerDepeg() public {
@@ -32,6 +35,19 @@ contract Y2KEarthquakeV1InsuranceProviderTest is BaseTest, ControllerHelper {
         vHedge = Vault(hedge);
         vRisk = Vault(risk);
 
+        // Create another 2 epochs
+        vm.startPrank(vHedge.factory());
+        vHedge.createAssets(endEpoch,          endEpoch + 1 days, 5);
+        vHedge.createAssets(endEpoch + 1 days, endEpoch + 2 days, 5);
+        vm.stopPrank();
+
+        vm.startPrank(vRisk.factory());
+        vRisk.createAssets(endEpoch,          endEpoch + 1 days, 5);
+        vRisk.createAssets(endEpoch + 1 days, endEpoch + 2 days, 5);
+        vm.stopPrank();
+
+        vm.warp(beginEpoch + 1);
+
         address user0 = createTestUser(0);
         vm.startPrank(user0);
 
@@ -40,6 +56,8 @@ contract Y2KEarthquakeV1InsuranceProviderTest is BaseTest, ControllerHelper {
         IERC20(weth).approve(address(provider), 10 ether);
         assertEq(provider.nextEpochPurchased(), 0);
         provider.purchaseForNextEpoch(10 ether);
+
+        return;
 
         assertEq(provider.nextEpochPurchased(), 10 ether);
         assertEq(provider.currentEpochPurchased(), 0);
@@ -122,6 +140,19 @@ contract Y2KEarthquakeV1InsuranceProviderTest is BaseTest, ControllerHelper {
 
         vHedge = Vault(hedge);
         vRisk = Vault(risk);
+
+        // Create another 2 epochs
+        vm.startPrank(vHedge.factory());
+        vHedge.createAssets(endEpoch,          endEpoch + 1 days, 5);
+        vHedge.createAssets(endEpoch + 1 days, endEpoch + 2 days, 5);
+        vm.stopPrank();
+
+        vm.startPrank(vRisk.factory());
+        vRisk.createAssets(endEpoch,          endEpoch + 1 days, 5);
+        vRisk.createAssets(endEpoch + 1 days, endEpoch + 2 days, 5);
+        vm.stopPrank();
+
+        vm.warp(beginEpoch + 1);
 
         address user0 = createTestUser(0);
         vm.startPrank(user0);

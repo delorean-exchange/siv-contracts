@@ -39,24 +39,22 @@ contract SelfInsuredVault is ERC20 {
     // It updates and accumulates each time the user's shares change, and
     // tracks positions in three ways:
     //
-    // (1) It tracks the start of the "next" epoch, and the user's balance
-    //     in this epoch. `nextEpochId` indicates the start of the "next"
-    //     epoch. In that epoch, and all subsequent epochs, the user has
-    //     `nextShares` number of shares.
-    // (2) It tracks the epoch range before the "next" epoch. These are
-    //     the epochs between [startEpochId, nextEpochId). In this range,
-    //     the user has `shares` number of shares.
-    // (3) It tracks previously accumulated payouts in the `accumulatedPayouts`
+    // (1) It tracks the live time of their start and end of their currently
+    //     purchased shares, represented by [startEpochId, endEpochId]. In
+    //     that range, the user has `shares` number of shares.
+    // (2) It tracks previously accumulated payouts in the `accumulatedPayouts`
     //     field. This is the amount of `paymentToken` that the user is
     //     entitled to. This field is updated whenever the number of shares
     //     changes, and it is set to the value of payouts in the range
-    //     [startEpochId, nextEpochId).
+    //     [startEpochId, endEpochId].
+    // (3) It tracks the user's number of shares for the epochs *after*
+    //     endEpochId. That number of shares is `nextShares`.
     //
     // The `claimedPayouts` field indicates what the user has already claimed.
     struct UserEpochTracker {
         uint256 startEpochId;
         uint256 shares;
-        uint256 nextEpochId;
+        uint256 endEpochId;
         uint256 nextShares;
         uint256 accumulatedPayouts;
         uint256 claimedPayouts;
@@ -220,7 +218,7 @@ contract SelfInsuredVault is ERC20 {
         require(msg.sender == owner, "SIV: withdraw only owner");
         require(balanceOf(owner) >= assets, "SIV: withdraw insufficient balance");
 
-        _unlockIfNeeded();
+        _unlockIfPossible();
 
         _updateYield(owner, address(yieldSource.yieldToken()));
         _updateProviderEpochs(-int256(assets));
@@ -331,7 +329,7 @@ contract SelfInsuredVault is ERC20 {
             gyInfo.yieldPerTokenStored;
     }
 
-    // Counts the depeg rewards for epochs between [startEpochId, nextEpochId)
+    // Counts the depeg rewards for epochs between [startEpochId, endEpochId]
     function _computeAccumulatePayouts(address user) internal view returns (uint256)  {
         UserEpochTracker storage tracker = userEpochTrackers[user];
         if (tracker.startEpochId == 0) return 0;
@@ -341,15 +339,15 @@ contract SelfInsuredVault is ERC20 {
 
         for (uint256 i = 0; i < providers.length; i++) {
             IInsuranceProvider provider = providers[i];
-            uint256 nextEpochId = provider.nextEpoch();
             uint256 currentEpochId = provider.currentEpoch();
+            require(currentEpochId != 0, "SIV: cannot compute with zero current epoch");
             EpochInfo[] storage infos = providerEpochs[address(provider)];
 
             // TODO: GAS: Use nextId field + mapping instead of list
             for (uint256 j = 0; j < infos.length; j++) {
                 EpochInfo storage info = infos[j];
                 if (info.epochId < tracker.startEpochId) continue;
-                if (info.epochId >= tracker.nextEpochId) break;
+                if (info.epochId > tracker.endEpochId) break;
                 if (info.epochId == currentEpochId) break;
                 deltaAccumulatedPayouts += (tracker.shares * info.payout) / info.totalShares;
             }
@@ -374,29 +372,63 @@ contract SelfInsuredVault is ERC20 {
         console.log("----");
     }
 
+    /* function _updateEpochInfos(uint256 i) internal { */
+    function _updateEpochInfos(uint256 i) public {
+        // The _updateEpochInfos() method is responsible for
+        // maintaining the following invariants for each array of
+        // EpochInfo's:
+        //
+        // - List size is N
+        // - Elements at 0..N-1 are past or current epochs
+        // - Element at N has epochId 0
+        // - Upcoming epochs are *not* present
+        //
+        // This properly handles the fact that the next epoch may
+        // or may not have an ID assigned at all times.
+        IInsuranceProvider provider = providers[i];
+
+        console.log("current epoch is:", provider.currentEpoch());
+
+        require(provider.currentEpoch() != 0, "SIV: update with zero current epoch");
+        EpochInfo[] storage epochs = providerEpochs[address(provider)];
+
+        // Initialize with current epoch + zero ID epoch
+        if (epochs.length == 0) {
+            epochs.push(EpochInfo(provider.currentEpoch(), 0, 0, 0));
+            epochs.push(EpochInfo(0, 0, 0, 0));
+        }
+        EpochInfo storage terminal = epochs[epochs.length - 1];
+        uint256 totalShares = terminal.totalShares;
+
+        // Start from 2nd to last EpochInfo, and update to match data
+        // from the provider
+        uint256 index = epochs.length - 2;
+        uint256 id = epochs[index].epochId;
+
+        // Update to maintain list invariant
+        while (true) {
+            uint256 nextId = provider.followingEpoch(id);
+            if (nextId == 0) break;
+            if (nextId > provider.currentEpoch()) break;
+            epochs[index + 1].epochId = nextId;
+            epochs[index + 1].totalShares = totalShares;
+            epochs.push(EpochInfo(0, totalShares, 0, 0));
+            id = nextId;
+            index++;
+        }
+    }
+
     function _updateProviderEpochs(int256 deltaShares) internal {
         for (uint256 i = 0; i < providers.length; i++) {
-            IInsuranceProvider provider = providers[i];
-            EpochInfo[] storage epochs = providerEpochs[address(provider)];
+            _updateEpochInfos(i);
 
-            // Create first EpochInfo, if needed
-            if (epochs.length == 0) {
-                epochs.push(EpochInfo(provider.nextEpoch(), 0, 0, 0)); 
-            }
-            EpochInfo storage epochInfo = epochs[epochs.length - 1];
-            uint256 totalShares = epochInfo.totalShares;
+            EpochInfo[] storage epochs = providerEpochs[address(providers[i])];
+            EpochInfo storage terminal = epochs[epochs.length - 1];
 
-            // Add new EpochInfo's, if needed
-            uint256 id = provider.followingEpoch(epochInfo.epochId);
-            while (id != 0) {
-                epochs.push(EpochInfo(id, totalShares, 0, 0));
-                epochInfo = epochs[epochs.length - 1];
-                id = provider.followingEpoch(id);
-            }
-
-            epochInfo.totalShares = deltaShares > 0
-                ? epochInfo.totalShares + uint256(deltaShares)
-                : epochInfo.totalShares - uint256(-deltaShares);
+            // Update the terminal (zero ID) EpochInfo
+            terminal.totalShares = deltaShares > 0
+                ? terminal.totalShares + uint256(deltaShares)
+                : terminal.totalShares - uint256(-deltaShares);
         }
     }
 
@@ -406,16 +438,17 @@ contract SelfInsuredVault is ERC20 {
         UserEpochTracker storage tracker = userEpochTrackers[user];
 
         // Assuming synchronized epoch ID's, this is asserted elsewhere
-        uint256 nextEpochId = providers[0].nextEpoch();
+        uint256 currentEpochId = providers[0].currentEpoch();
+        require(currentEpochId != 0, "SIV: cannot update tracker with zero current");
 
-        // See if we need to shift nextEpoch into start/end epoch segment
-        if (nextEpochId != tracker.nextEpochId) {
+        // See if we need to shift `nextShares` into `shares`
+        if (currentEpochId != tracker.endEpochId) {
             uint256 deltaAccumulatdPayouts = _computeAccumulatePayouts(user);
 
             tracker.accumulatedPayouts += deltaAccumulatdPayouts;
 
-            tracker.startEpochId = tracker.nextEpochId;
-            tracker.nextEpochId = nextEpochId;
+            tracker.startEpochId = providers[0].followingEpoch(tracker.endEpochId);
+            tracker.endEpochId = currentEpochId;
             tracker.shares = tracker.nextShares;
         }
 
@@ -464,8 +497,8 @@ contract SelfInsuredVault is ERC20 {
     function _pendingPayouts(address who) internal view returns (uint256) {
         uint256 deltaAccumulatdPayouts = _computeAccumulatePayouts(who);
 
-        // `deltaAccumulatdPayouts` includes [startEpochId, nextEpochId), but we
-        // also want [nextEpochId, currentEpochId].
+        // `deltaAccumulatdPayouts` includes [startEpochId, endEpochId], but we
+        // also want (endEpochId, currentEpochId].
         uint256 accumulatedPayouts;
         UserEpochTracker storage tracker = userEpochTrackers[who];
         for (uint256 i = 0; i < providers.length; i++) {
@@ -475,15 +508,11 @@ contract SelfInsuredVault is ERC20 {
             EpochInfo[] storage infos = providerEpochs[address(provider)];
 
             // TODO: GAS: Use nextId field + mapping instead of list
-            for (uint256 j = 0; j < infos.length; j++) {
+            // Loop skips the last (zero ID) EpochInfo
+            for (uint256 j = 0; j < infos.length - 1; j++) {
                 EpochInfo storage info = infos[j];
-                if (info.epochId < tracker.nextEpochId) continue;
-
+                if (info.epochId <= tracker.endEpochId) continue;
                 accumulatedPayouts += (tracker.nextShares * info.payout) / info.totalShares;
-
-                // Check below expected to be redundant, since the last element
-                // should be for the current epoch
-                if (info.epochId == currentEpochId) break;
             }
         }
 
@@ -514,7 +543,7 @@ contract SelfInsuredVault is ERC20 {
     }
 
     function setDeloreanSwap(address dlxSwap_) external onlyAdmin {
-        _unlockIfNeeded();
+        _unlockIfPossible();
         require(dlxId == 0, "SIV: non zero dlx id");
         dlxSwap = NPVSwap(dlxSwap_);
     }
@@ -576,8 +605,16 @@ contract SelfInsuredVault is ERC20 {
         for (uint256 i = 0; i < providers.length; i++) {
             address provider = address(providers[i]);
 
-            for (j = claimedPayoutsIndex; j < providerEpochs[provider].length; j++) {
+            _updateEpochInfos(i);
+
+            console.log("after update:");
+            this.pprintEpochs();
+
+            for (j = claimedPayoutsIndex; j < providerEpochs[provider].length - 1; j++) {
                 uint256 epochId = providerEpochs[provider][j].epochId;
+
+                console.log("-> claim payouts for", epochId, j);
+
                 uint256 amount = providers[i].claimPayouts(epochId);
                 providerEpochs[provider][j].payout += amount;
             }
@@ -586,29 +623,25 @@ contract SelfInsuredVault is ERC20 {
         claimedPayoutsIndex = j;
     }
 
-    function _claimVaultPayoutsProviderEpoch(uint256 providerIndex, uint256 epochId) public returns (uint256) {
-    }
-
     function _purchaseForNextEpoch(uint256 i, uint256 amount) internal {
         IInsuranceProvider provider = providers[i];
         require(provider.isNextEpochPurchasable(), "SIV: not purchasable");
 
-        uint256 nextEpochId = provider.nextEpoch();
-        EpochInfo[] storage epochs = providerEpochs[address(provider)];
-        if (epochs.length == 0 || epochs[epochs.length - 1].epochId != nextEpochId) {
-            epochs.push(EpochInfo(nextEpochId, 0, 0, 0));
-        }
-        EpochInfo storage epochInfo = epochs[epochs.length - 1];
-        require(epochInfo.premiumPaid == 0, "SIV: already purchased");
+        _updateEpochInfos(i);
+        
+        EpochInfo[] storage epochs = providerEpochs[address(providers[i])];
+        EpochInfo storage terminal = epochs[epochs.length - 1];
+
+        require(terminal.premiumPaid == 0, "SIV: already purchased");
 
         uint256 weight = weights[i];
 
         IERC20(provider.paymentToken()).approve(address(provider), amount);
         provider.purchaseForNextEpoch(amount);
-        epochInfo.premiumPaid = amount;
+        terminal.premiumPaid = amount;
     }
 
-    function _unlockIfNeeded() internal {
+    function _unlockIfPossible() internal {
         if (dlxId == 0) return;
         if (dlxSwap.slice().remaining(dlxId) != 0) return;
         dlxSwap.slice().unlockDebtSlice(dlxId);
@@ -633,7 +666,7 @@ contract SelfInsuredVault is ERC20 {
         yieldSource.withdraw(amountLock, false, address(this));
         yieldSource.generatorToken().approve(address(dlxSwap), amountLock);
 
-        _unlockIfNeeded();
+        _unlockIfPossible();
         require(dlxId == 0, "SIV: active delorean position");
         (uint256 id,
          uint256 actualOut) = dlxSwap.lockForYield(address(this),

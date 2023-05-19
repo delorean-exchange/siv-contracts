@@ -50,9 +50,6 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
     YieldData public dataCredit;
     Discounter public discounter;
 
-    IERC20 public generatorToken;
-    IERC20 public yieldToken;
-
     UniswapV3LiquidityPool public pool;
     IUniswapV3Pool public uniswapV3Pool;
     INonfungiblePositionManager public manager;
@@ -73,8 +70,6 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
     }
 
     function setUpVault() public {
-        /* vm.selectFork(vm.createFork(ARBITRUM_RPC_URL)); */
-
         uint256 wethAmount = 1000000e18;
         vm.deal(address(this), wethAmount);
         IWrappedETH(WETH).deposit{value: wethAmount}();
@@ -85,10 +80,10 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         yt = source.yieldToken();
 
         vault = new SelfInsuredVault("Self Insured YS:G Vault",
-                                                      "siYS:G",
-                                                      address(source.yieldToken()),
-                                                      address(source),
-                                                      address(0));
+                                     "siYS:G",
+                                     address(source.yieldToken()),
+                                     address(source),
+                                     address(0));
         source.setOwner(address(vault));
     }
 
@@ -355,6 +350,9 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         setUpVault();
         setUpY2K();
 
+        // Move into the first epoch
+        vm.warp(beginEpoch + 10 days);
+
         vault.setAdmin(ADMIN);
 
         // Alice deposits into self insured vault
@@ -366,18 +364,20 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         vault.deposit(2e18, ALICE);
 
         {
-            (uint256 epochId, uint256 totalShares, , ) = vault.providerEpochs(address(provider), 0);
-            assertEq(totalShares, 2e18);
+            (uint256 epochId0, uint256 totalShares0, , ) = vault.providerEpochs(address(provider), 0);
+            assertEq(totalShares0, 0);
+            (uint256 epochId1, uint256 totalShares1, , ) = vault.providerEpochs(address(provider), 1);
+            assertEq(totalShares1, 2e18);
 
             (uint256 startEpochId,
              uint256 shares,
-             uint256 nextEpochId,
+             uint256 endEpochId,
              uint256 nextShares,
              uint256 accumulatedPayouts,
              uint256 claimedPayouts) = vault.userEpochTrackers(ALICE);
             assertEq(startEpochId, 0);
             assertEq(shares, 0);
-            assertEq(nextEpochId, epochId);
+            assertEq(endEpochId, epochId0);
             assertEq(nextShares, 2e18);
             assertEq(accumulatedPayouts, 0);
             assertEq(claimedPayouts, 0);
@@ -386,18 +386,20 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         gt.approve(address(vault), 1e18);
         vault.deposit(1e18, ALICE);
         {
-            (uint256 epochId, uint256 totalShares, , ) = vault.providerEpochs(address(provider), 0);
-            assertEq(totalShares, 3e18);
+            (uint256 epochId0, uint256 totalShares0, , ) = vault.providerEpochs(address(provider), 0);
+            assertEq(totalShares0, 0);
+            (uint256 epochId1, uint256 totalShares1, , ) = vault.providerEpochs(address(provider), 1);
+            assertEq(totalShares1, 3e18);
 
             (uint256 startEpochId,
              uint256 shares,
-             uint256 nextEpochId,
+             uint256 endEpochId,
              uint256 nextShares,
              uint256 accumulatedPayouts,
              uint256 claimedPayouts) = vault.userEpochTrackers(ALICE);
             assertEq(startEpochId, 0);
             assertEq(shares, 0);
-            assertEq(nextEpochId, epochId);
+            assertEq(endEpochId, epochId0);
             assertEq(nextShares, 3e18);
             assertEq(accumulatedPayouts, 0);
             assertEq(claimedPayouts, 0);
@@ -405,8 +407,7 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
 
         vm.stopPrank();
 
-        // Move ahead to next epoch, end it
-        vm.warp(beginEpoch + 10 days);
+        // End the next epoch
         vm.startPrank(vHedge.controller());
         vHedge.endEpoch(provider.currentEpoch());
         vm.stopPrank();
@@ -428,29 +429,29 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         // Alice deposits more shares
         vm.startPrank(ALICE);
         gt.approve(address(vault), 3e18);
-
         vault.deposit(3e18, ALICE);
         vm.stopPrank();
 
-        vault.pprintEpochs();
+        /* vault.pprintEpochs(); */
 
         {
             (uint256 epochId0, uint256 totalShares0, , ) = vault.providerEpochs(address(provider), 0);
-            assertEq(totalShares0, 3e18);
+            assertEq(totalShares0, 0);
             (uint256 epochId1, uint256 totalShares1, , ) = vault.providerEpochs(address(provider), 1);
             assertEq(totalShares1, 3e18);
             (uint256 epochId2, uint256 totalShares2, , ) = vault.providerEpochs(address(provider), 2);
+            assertEq(epochId2, 0);
             assertEq(totalShares2, 6e18);
 
             (uint256 startEpochId,
              uint256 shares,
-             uint256 nextEpochId,
+             uint256 endEpochId,
              uint256 nextShares,
              uint256 accumulatedPayouts,
              uint256 claimedPayouts) = vault.userEpochTrackers(ALICE);
 
-            assertEq(startEpochId, epochId0);
-            assertEq(nextEpochId, epochId2);
+            assertEq(startEpochId, epochId1);
+            assertEq(endEpochId, epochId1);
             assertEq(shares, 3e18);
             assertEq(nextShares, 6e18);
             assertEq(accumulatedPayouts, 0);
@@ -461,26 +462,15 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
     }
 
     function testPurchaseWithDLXFutureYield() public {
-        // Send lots of WETH to vaultSource
+        // Send lots of WETH to vault source
         uint256 wethAmount = 1000000e18;
         vm.deal(address(this), wethAmount);
         IWrappedETH(WETH).deposit{value: wethAmount}();
-
-        FakeYieldSource vaultSource = new FakeYieldSource(200, WETH);
-        IERC20(WETH).transfer(address(vaultSource), wethAmount);
-
-        generatorToken = IERC20(vaultSource.generatorToken());
-        yieldToken = IERC20(vaultSource.yieldToken());
-        vaultSource.mintBoth(ALICE, 10e18);
-
-        vm.startPrank(ADMIN);
-        fakeOracle = new FakeOracle(ORACLE_FRAX, STRIKE_PRICE_FAKE_ORACLE);
-        vaultFactory.createNewMarket(FEE, TOKEN_FRAX, DEPEG_AAA, beginEpoch, endEpoch, address(fakeOracle), "y2kFRAX_99*");
-        vm.stopPrank();
-        hedge = vaultFactory.getVaults(1)[0];
-        risk = vaultFactory.getVaults(1)[1];
-        vHedge = Vault(hedge);
-        vRisk = Vault(risk);
+        source = new FakeYieldSource(200, WETH);
+        IERC20(WETH).transfer(address(source), wethAmount);
+        gt = IERC20(source.generatorToken());
+        yt = IERC20(source.yieldToken());
+        source.mintBoth(ALICE, 10e18);
 
         // TODO: Consolidate this setup code
         // -- Set up Delorean market --/
@@ -488,7 +478,7 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         YieldData dataCredit = new YieldData(20);
         Discounter discounter = new Discounter(1e13, 500, 360, 18);
 
-        FakeYieldSource dlxSource = vaultSource;
+        FakeYieldSource dlxSource = source;
         slice = new YieldSlice("npvETH-FAKE",
                                address(dlxSource),
                                address(dataDebt),
@@ -508,9 +498,9 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
 
         // Uniswap V3 setup for Delorean
         manager = INonfungiblePositionManager(arbitrumNonfungiblePositionManager);
-        (address token0, address token1) = address(npvToken) < address(yieldToken)
-            ? (address(npvToken), address(yieldToken))
-            : (address(yieldToken), address(npvToken));
+        (address token0, address token1) = address(npvToken) < address(yt)
+            ? (address(npvToken), address(yt))
+            : (address(yt), address(npvToken));
         uniswapV3Pool = IUniswapV3Pool(IUniswapV3Factory(arbitrumUniswapV3Factory).getPool(token0, token1, 3000));
         if (address(uniswapV3Pool) == address(0)) {
             uniswapV3Pool = IUniswapV3Pool(IUniswapV3Factory(arbitrumUniswapV3Factory).createPool(token0, token1, 3000));
@@ -521,7 +511,7 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
 
         // Add liquidity
         vm.startPrank(ALICE);
-        generatorToken.approve(address(npvSwap), 1000e18);
+        gt.approve(address(npvSwap), 1000e18);
         npvSwap.lockForNPV(ALICE, ALICE, 1000e18, 10e18, new bytes(0));
         uint256 token0Amount = 1e18;
         uint256 token1Amount = 1e18;
@@ -545,29 +535,53 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         manager.mint(params);
         assertTrue(uniswapV3Pool.liquidity() > 0);
         vm.stopPrank();
-
         // -- Delorean setup complete -- //
 
-
         vm.startPrank(ADMIN);
-        SelfInsuredVault vault = new SelfInsuredVault("Self Insured YS:G Vault",
-                                                      "siYS:G",
-                                                      address(vaultSource.yieldToken()),
-                                                      address(vaultSource),
-                                                      address(npvSwap));
+        fakeOracle = new FakeOracle(ORACLE_FRAX, STRIKE_PRICE_FAKE_ORACLE);
+        vaultFactory.createNewMarket(FEE, TOKEN_FRAX, DEPEG_AAA, beginEpoch, endEpoch, address(fakeOracle), "y2kFRAX_99*");
+        vm.stopPrank();
+        hedge = vaultFactory.getVaults(1)[0];
+        risk = vaultFactory.getVaults(1)[1];
+        vHedge = Vault(hedge);
+        vRisk = Vault(risk);
+
+        // Create another 2 epochs
+        vm.startPrank(vHedge.factory());
+        vHedge.createAssets(endEpoch,          endEpoch + 1 days, 5);
+        vHedge.createAssets(endEpoch + 1 days, endEpoch + 2 days, 5);
         vm.stopPrank();
 
+        vm.startPrank(vRisk.factory());
+        vRisk.createAssets(endEpoch,          endEpoch + 1 days, 5);
+        vRisk.createAssets(endEpoch + 1 days, endEpoch + 2 days, 5);
+        vm.stopPrank();
+
+        vm.startPrank(ADMIN);
+        vault = new SelfInsuredVault("Self Insured YS:G Vault",
+                                     "siYS:G",
+                                     address(source.yieldToken()),
+                                     address(source),
+                                     address(npvSwap));
+        vm.stopPrank();
+
+
         // Set up the insurance provider
-        Y2KEarthquakeV1InsuranceProvider provider;
         provider = new Y2KEarthquakeV1InsuranceProvider(address(vHedge), address(vault));
         provider.transferOwnership(address(vault));
+
+        vm.warp(beginEpoch + 1);
+
+        console.log("current epoch", provider.currentEpoch());
+        console.log("endEpoch     ", endEpoch);
 
         // Bob buys the risk
         vm.startPrank(BOB);
         vm.deal(BOB, 200 ether);
         IWrappedETH(WETH).deposit{value: 200 ether}();
         IERC20(WETH).approve(address(vRisk), 200e18);
-        vRisk.deposit(endEpoch, 200e18, BOB);
+        vRisk.deposit(endEpoch + 1 days, 200e18, BOB);
+        console.log("Bob bought risk for:", endEpoch + 1 days);
         vm.stopPrank();
 
         // Set the insurance provider at 10% of expected yield
@@ -578,7 +592,7 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
 
         // Deposit into the vault
         vm.startPrank(ALICE);
-        generatorToken.approve(address(vault), 2e18);
+        gt.approve(address(vault), 2e18);
         vault.deposit(2e18, ALICE);
         vm.stopPrank();
 
@@ -586,21 +600,41 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         vault.purchaseInsuranceForNextEpoch(99_00, 484807680000);
 
         // Trigger a depeg
-        vm.warp(beginEpoch + 10 days);
+        vm.warp(endEpoch + 1 minutes);
         assertEq(epochPayout(vault, address(provider), 0), 0);
-        controller.triggerDepeg(SINGLE_MARKET_INDEX, endEpoch);
+        controller.triggerDepeg(SINGLE_MARKET_INDEX, endEpoch + 1 days);
+
+        vm.startPrank(address(controller));
+        console.log("End these epochs:", endEpoch + 1 days);
+        vHedge.endEpoch(endEpoch);
+        vHedge.endEpoch(endEpoch + 1 days);
+        vRisk.endEpoch(endEpoch);
+        vRisk.endEpoch(endEpoch + 1 days);
+        vm.stopPrank();
+
+        console.log("");
+        console.log("");
+
+        /* vault._updateEpochInfos(0); */
+        vault.pprintEpochs();
+
+        console.log("");
+        console.log("");
+        console.log("====");
+        console.log("");
+        console.log("");
 
         vault.claimVaultPayouts();
 
         assertTrue(IERC20(WETH).balanceOf(address(vault)) > 199e18);
-        assertTrue(IERC20(WETH).balanceOf(address(vault)) >= epochPayout(vault, address(provider), 0));
+        assertTrue(IERC20(WETH).balanceOf(address(vault)) >= epochPayout(vault, address(provider), 1));
         assertEq(IERC20(WETH).balanceOf(address(vault)), 199000000043502021492);
 
-        assertEq(epochPayout(vault, address(provider), 0), 199000000000024154370);
+        assertEq(epochPayout(vault, address(provider), 1), 199000000000024154370);
 
         // Redundant claim should not change it
         vault.claimVaultPayouts();
-        assertEq(epochPayout(vault, address(provider), 0), 199000000000024154370);
+        assertEq(epochPayout(vault, address(provider), 1), 199000000000024154370);
         assertEq(IERC20(WETH).balanceOf(address(vault)), 199000000043502021492);
 
         vault.pprintEpochs();
@@ -610,7 +644,7 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
             uint256[] memory previewRewards = vault.previewClaimRewards(ALICE);
             uint256 previewPayouts = vault.previewClaimPayouts(ALICE);
             assertEq(previewPayouts, 199000000000024154370);
-            assertEq(previewPayouts, epochPayout(vault, address(provider), 0));
+            assertEq(previewPayouts, epochPayout(vault, address(provider), 1));
         }
 
         {
@@ -622,20 +656,20 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
 
         // Partial withdraw from the vault
         {
-            uint256 before = IERC20(generatorToken).balanceOf(ALICE);
+            uint256 before = IERC20(gt).balanceOf(ALICE);
             vm.prank(ALICE);
             vault.withdraw(15e17, ALICE, ALICE);
-            uint256 delta = IERC20(generatorToken).balanceOf(ALICE) - before;
+            uint256 delta = IERC20(gt).balanceOf(ALICE) - before;
             assertEq(delta, 15e17);
             assertEq(vault.balanceOf(ALICE), 5e17);
         }
 
         // Withdraw the rest
         {
-            uint256 before = IERC20(generatorToken).balanceOf(ALICE);
+            uint256 before = IERC20(gt).balanceOf(ALICE);
             vm.prank(ALICE);
             vault.withdraw(5e17, ALICE, ALICE);
-            uint256 delta = IERC20(generatorToken).balanceOf(ALICE) - before;
+            uint256 delta = IERC20(gt).balanceOf(ALICE) - before;
             assertEq(delta, 5e17);
             assertEq(vault.balanceOf(ALICE), 0);
         }
