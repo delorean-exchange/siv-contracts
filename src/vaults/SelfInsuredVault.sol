@@ -387,8 +387,6 @@ contract SelfInsuredVault is ERC20 {
         // or may not have an ID assigned at all times.
         IInsuranceProvider provider = providers[i];
 
-        console.log("current epoch is:", provider.currentEpoch());
-
         require(provider.currentEpoch() != 0, "SIV: update with zero current epoch");
         EpochInfo[] storage epochs = providerEpochs[address(provider)];
 
@@ -606,15 +604,8 @@ contract SelfInsuredVault is ERC20 {
             address provider = address(providers[i]);
 
             _updateEpochInfos(i);
-
-            console.log("after update:");
-            this.pprintEpochs();
-
             for (j = claimedPayoutsIndex; j < providerEpochs[provider].length - 1; j++) {
                 uint256 epochId = providerEpochs[provider][j].epochId;
-
-                console.log("-> claim payouts for", epochId, j);
-
                 uint256 amount = providers[i].claimPayouts(epochId);
                 providerEpochs[provider][j].payout += amount;
             }

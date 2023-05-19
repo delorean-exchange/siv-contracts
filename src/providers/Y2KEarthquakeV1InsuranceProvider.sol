@@ -40,12 +40,8 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
         if (vault.epochsLength() == 0) return 0;
 
         int256 len = int256(vault.epochsLength());
-        /* console.log("LEN IS", uint256(len)); */
         for (int256 i = len - 1; i >= 0 && i > len - 4; i--) {
             uint256 epochId = vault.epochs(uint256(i));
-            /* console.log("Check if this epoch is current one:", uint256(i), epochId, block.timestamp); */
-            /* console.log("- TS > begin?", block.timestamp > vault.idEpochBegin(epochId)); */
-
             if (block.timestamp > vault.idEpochBegin(epochId)) {
                 return epochId;
             }
@@ -60,7 +56,6 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
 
     function _nextEpoch() internal view returns (uint256) {
         uint256 len = vault.epochsLength();
-        console.log("LEN", len);
         if (len == 0) return 0;
         return followingEpoch(_currentEpoch());
     }
@@ -99,9 +94,6 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
     function purchaseForNextEpoch(uint256 amountPremium) external onlyOwner override {
         paymentToken.safeTransferFrom(msg.sender, address(this), amountPremium);
         paymentToken.safeApprove(address(vault), amountPremium);
-
-        console.log("====> purchase for:", _nextEpoch());
-
         vault.deposit(_nextEpoch(), amountPremium, address(this));
     }
 
@@ -139,10 +131,6 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
 
     function claimPayouts(uint256 epochId) external override onlyOwner returns (uint256) {
         require(epochId == vault.epochs(claimedEpochIndex), "YEIP: must claim sequentially");
-
-        console.log("claiming payouts for", epochId);
-        console.log("is it in the past?  ", epochId < block.timestamp);
-
         uint256 amount = _claimPayoutForEpoch(epochId);
         if (amount > 0) paymentToken.safeTransfer(beneficiary, amount);
         claimedEpochIndex++;
