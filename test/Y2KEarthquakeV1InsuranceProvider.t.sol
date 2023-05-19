@@ -6,9 +6,9 @@ import "forge-std/console.sol";
 import { IERC20 } from "openzeppelin/token/ERC20/IERC20.sol";
 import { ERC20 } from "@solmate/tokens/ERC20.sol";
 
-import { Controller } from "y2k-earthquake/src/Controller.sol";
-import { ControllerHelper } from "y2k-earthquake/test/ControllerHelper.sol";
-import { Vault } from "y2k-earthquake/src/Vault.sol";
+import { Controller } from "y2k-earthquake/src/legacy_v1/Controller.sol";
+import { Vault } from "y2k-earthquake/src/legacy_v1/Vault.sol";
+import { ControllerHelper } from "y2k-earthquake/test/legacy_v1/ControllerHelper.sol";
 
 import { BaseTest } from "./BaseTest.sol";
 import { Y2KEarthquakeV1InsuranceProvider } from "../src/providers/Y2KEarthquakeV1InsuranceProvider.sol";

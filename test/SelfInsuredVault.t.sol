@@ -17,10 +17,10 @@ import { SelfInsuredVault } from "../src/vaults/SelfInsuredVault.sol";
 import { Y2KEarthquakeV1InsuranceProvider } from "../src/providers/Y2KEarthquakeV1InsuranceProvider.sol";
 
 // Y2K imports
-import { ControllerHelper } from "y2k-earthquake/test/ControllerHelper.sol";
-import { Vault } from "y2k-earthquake/src/Vault.sol";
-import { VaultFactory, TimeLock} from "y2k-earthquake/src/VaultFactory.sol";
-import { Controller } from "y2k-earthquake/src/Controller.sol"; 
+import { Vault } from "y2k-earthquake/src/legacy_v1/Vault.sol";
+import { VaultFactory, TimeLock} from "y2k-earthquake/src/legacy_v1/VaultFactory.sol";
+import { Controller } from "y2k-earthquake/src/legacy_v1/Controller.sol"; 
+import { ControllerHelper } from "y2k-earthquake/test/legacy_v1/ControllerHelper.sol";
 import { FakeOracle } from "y2k-earthquake/test/oracles/FakeOracle.sol";
 
 // Delorean imports

@@ -9,15 +9,13 @@ import { YieldSlice } from  "dlx/src/core/YieldSlice.sol";
 import { IYieldSource } from  "dlx/src/interfaces/IYieldSource.sol";
 import { JonesGLPYieldSource } from "dlx/src/sources/JonesGLPYieldSource.sol";
 
-import { VaultFactory, TimeLock } from "y2k-earthquake/src/VaultFactory.sol";
-import { FakeOracle } from "y2k-earthquake/test/oracles/FakeOracle.sol";
-import { Controller } from "y2k-earthquake/src/Controller.sol"; 
-import { Vault } from "y2k-earthquake/src/Vault.sol";
+import { VaultFactory, TimeLock } from "y2k-earthquake/src/legacy_v1/VaultFactory.sol";
+import { Controller } from "y2k-earthquake/src/legacy_v1/Controller.sol"; 
+import { Vault } from "y2k-earthquake/src/legacy_v1/Vault.sol";
 
 import { IInsuranceProvider } from "../src/interfaces/IInsuranceProvider.sol";
 import { SelfInsuredVault } from "../src/vaults/SelfInsuredVault.sol";
 import { Y2KEarthquakeV1InsuranceProvider } from "../src/providers/Y2KEarthquakeV1InsuranceProvider.sol";
-/* import { JonesGLPYieldSource } from "../src/sources/JonesGLPYieldSource.sol"; */
 
 import { BaseScript } from "./BaseScript.sol";
 
@@ -28,7 +26,6 @@ contract DeployFakeSelfInsuredVaultScript is BaseScript {
 
     Controller public controller;
     VaultFactory public vaultFactory;
-    FakeOracle public fakeOracle;
     address public hedge;
     address public risk;
     Vault public vHedge;

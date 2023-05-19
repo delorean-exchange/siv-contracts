@@ -6,7 +6,7 @@ import { Ownable } from "openzeppelin/access/Ownable.sol";
 import { IERC20 } from "openzeppelin/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "openzeppelin/token/ERC20/utils/SafeERC20.sol";
 import { ERC1155Holder } from "openzeppelin/token/ERC1155/utils/ERC1155Holder.sol";
-import { Vault } from  "y2k-earthquake/src/Vault.sol";
+import { Vault } from  "y2k-earthquake/src/legacy_v1/Vault.sol";
 
 import { IInsuranceProvider } from  "../interfaces/IInsuranceProvider.sol";
 
@@ -40,6 +40,7 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
         if (vault.epochsLength() == 0) return 0;
 
         int256 len = int256(vault.epochsLength());
+        // Look back at most 
         for (int256 i = len - 1; i >= 0 && i > len - 4; i--) {
             uint256 epochId = vault.epochs(uint256(i));
             if (block.timestamp > vault.idEpochBegin(epochId)) {
@@ -61,6 +62,7 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
     }
 
     function followingEpoch(uint256 epochId) public view returns (uint256) {
+        // Start from the end, since most 
         for (uint256 i = 1; i < vault.epochsLength(); i++) {
             if (vault.epochs(i - 1) == epochId) {
                 return vault.epochs(i);
