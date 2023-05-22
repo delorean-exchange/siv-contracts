@@ -19,3 +19,6 @@
 [submodule "lib/uniswap-periphery"]
 	path = lib/uniswap-periphery
 	url = https://github.com/Uniswap/v2-periphery.git
+[submodule "lib/solmate"]
+	path = lib/solmate
+	url = https://github.com/transmissions11/solmate.git
