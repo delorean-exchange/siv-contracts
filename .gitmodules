@@ -12,3 +12,6 @@
 [submodule "lib/dlx-contracts"]
 	path = lib/dlx-contracts
 	url = https://github.com/delorean-exchange/dlx-contracts
+[submodule "lib/Earthquake-dlx"]
+	path = lib/Earthquake-dlx
+	url = https://github.com/delorean-exchange/Earthquake-dlx
