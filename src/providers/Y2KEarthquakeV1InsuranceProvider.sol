@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import "forge-std/console.sol";
 import { Ownable } from "openzeppelin/access/Ownable.sol";
 import { IERC20 } from "openzeppelin/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "openzeppelin/token/ERC20/utils/SafeERC20.sol";
@@ -24,25 +23,24 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
     uint256 public claimedEpochIndex;
 
     constructor(address vault_, address beneficiary_) {
-        setInsuranceVault(vault_);
-        beneficiary = beneficiary_;
-
-        claimedEpochIndex = 0;
-    }
-
-    function setInsuranceVault(address vault_) public onlyOwner {
         vault = Vault(vault_);
         insuredToken = IERC20(address(vault.tokenInsured()));
         paymentToken = IERC20(address(vault.asset()));
+        beneficiary = beneficiary_;
+
+        claimedEpochIndex = 0;
     }
 
     function _currentEpoch() internal view returns (uint256) {
         if (vault.epochsLength() == 0) return 0;
 
         int256 len = int256(vault.epochsLength());
-        // Look back at most 
-        for (int256 i = len - 1; i >= 0 && i > len - 4; i--) {
+
+        for (int256 i = len - 1; i >= 0; i--) {
             uint256 epochId = vault.epochs(uint256(i));
+            if (block.timestamp > epochId) {
+                break;
+            }
             if (block.timestamp > vault.idEpochBegin(epochId)) {
                 return epochId;
             }
@@ -62,11 +60,17 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
     }
 
     function followingEpoch(uint256 epochId) public view returns (uint256) {
-        // Start from the end, since most 
-        for (uint256 i = 1; i < vault.epochsLength(); i++) {
-            if (vault.epochs(i - 1) == epochId) {
-                return vault.epochs(i);
+        uint256 len = vault.epochsLength();
+        if (len <= 1) return 0;
+
+        uint256 i = len - 2;
+        while (true) {
+            if (vault.epochs(i) == epochId) {
+                return vault.epochs(i + 1);
             }
+
+            if (i == 0) break;
+            i--;
         }
         return 0;
     }
@@ -80,7 +84,7 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
         return id - vault.idEpochBegin(id);
     }
 
-    function isNextEpochPurchasable() external override view returns (bool) {
+    function isNextEpochPurchasable() public override view returns (bool) {
         uint256 id = _nextEpoch();
         return id > 0 && block.timestamp <= vault.idEpochBegin(id);
     }
@@ -94,6 +98,7 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
     }
 
     function purchaseForNextEpoch(uint256 amountPremium) external onlyOwner override {
+        require(isNextEpochPurchasable(), "YEIP: cannot purchase next epoch");
         paymentToken.safeTransferFrom(msg.sender, address(this), amountPremium);
         paymentToken.safeApprove(address(vault), amountPremium);
         vault.deposit(_nextEpoch(), amountPremium, address(this));
@@ -123,7 +128,6 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
 
     function _claimPayoutForEpoch(uint256 epochId) internal returns (uint256) {
         if (vault.balanceOf(address(this), epochId) == 0) return 0;
-
         uint256 amount = vault.withdraw(epochId,
                                         vault.balanceOf(address(this), epochId),
                                         address(this),
