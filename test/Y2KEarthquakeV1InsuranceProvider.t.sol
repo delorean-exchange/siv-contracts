@@ -10,8 +10,11 @@ import { Controller } from "y2k-earthquake/src/legacy_v1/Controller.sol";
 import { Vault } from "y2k-earthquake/src/legacy_v1/Vault.sol";
 import { ControllerHelper } from "y2k-earthquake/test/legacy_v1/ControllerHelper.sol";
 
-import { BaseTest } from "./BaseTest.sol";
+import { IWrappedETH } from "../src/interfaces/IWrappedETH.sol";
+import { IInsuranceProvider } from "../src/interfaces/IInsuranceProvider.sol";
 import { Y2KEarthquakeV1InsuranceProvider } from "../src/providers/Y2KEarthquakeV1InsuranceProvider.sol";
+
+import { BaseTest } from "./BaseTest.sol";
 
 contract Y2KEarthquakeV1InsuranceProviderTest is BaseTest, ControllerHelper {
 
@@ -21,8 +24,7 @@ contract Y2KEarthquakeV1InsuranceProviderTest is BaseTest, ControllerHelper {
 
     Y2KEarthquakeV1InsuranceProvider provider;
 
-    function setUpVaults() public {
-    }
+    address user0 = createTestUser(1);
 
     // -- Depeg scenario -- //
     // Based on Y2K ControllerTest
@@ -48,7 +50,14 @@ contract Y2KEarthquakeV1InsuranceProviderTest is BaseTest, ControllerHelper {
 
         vm.warp(beginEpoch + 1);
 
-        address user0 = createTestUser(0);
+        // Bob buys the risk
+        vm.startPrank(BOB);
+        vm.deal(BOB, 20 ether);
+        IWrappedETH(WETH).deposit{value: 20 ether}();
+        IERC20(WETH).approve(address(vRisk), 20e18);
+        vRisk.deposit(endEpoch + 1 days, 20e18, BOB);
+        vm.stopPrank();
+
         vm.startPrank(user0);
 
         provider = new Y2KEarthquakeV1InsuranceProvider(address(vHedge), user0);
@@ -57,27 +66,47 @@ contract Y2KEarthquakeV1InsuranceProviderTest is BaseTest, ControllerHelper {
         assertEq(provider.nextEpochPurchased(), 0);
         provider.purchaseForNextEpoch(10 ether);
 
-        return;
+        assertEq(provider.nextEpochPurchased(), 10 ether);
+        assertEq(provider.currentEpochPurchased(), 0);
+
+        vm.warp(endEpoch - 1 minutes);
 
         assertEq(provider.nextEpochPurchased(), 10 ether);
         assertEq(provider.currentEpochPurchased(), 0);
 
-        vm.warp(beginEpoch + 10 days);
+        vm.warp(endEpoch + 1 minutes);
 
         assertEq(provider.nextEpochPurchased(), 0);
         assertEq(provider.currentEpochPurchased(), 10 ether);
 
-        controller.triggerDepeg(SINGLE_MARKET_INDEX, endEpoch);
+        vm.stopPrank();
+
+        controller.triggerDepeg(SINGLE_MARKET_INDEX, endEpoch + 1 days);
+        vm.startPrank(address(controller));
+        vHedge.endEpoch(endEpoch);
+        vHedge.endEpoch(endEpoch + 1 days);
+        vRisk.endEpoch(endEpoch);
+        vRisk.endEpoch(endEpoch + 1 days);
+        vm.stopPrank();
+
+        vm.startPrank(user0);
 
         uint256 pending = provider.pendingPayouts();
         uint256 before = IERC20(weth).balanceOf(user0);
-        uint256 result = provider.claimPayouts(provider.vault().epochs(0));
+
+        uint256 epoch1Id = provider.vault().epochs(1);
+        vm.expectRevert("YEIP: must claim sequentially");
+        provider.claimPayouts(epoch1Id);
+
+        uint256 result0 = provider.claimPayouts(provider.vault().epochs(0));
+        uint256 result1 = provider.claimPayouts(provider.vault().epochs(1));
+        uint256 result2 = provider.claimPayouts(provider.vault().epochs(2));
+
         uint256 delta = IERC20(weth).balanceOf(user0) - before;
 
-        console.log("Weth is:", address(weth));
-
-        assertEq(result, pending, "result == pending");
-        assertEq(delta, result, "delta == result");
+        assertEq(result1, 19950000000000000000);
+        assertEq(result1, pending, "result == pending");
+        assertEq(delta, result1, "delta == result");
 
         vm.stopPrank();
     }
