@@ -31,7 +31,7 @@ contract DeployFakeSelfInsuredVaultScript is BaseScript {
     Vault public vHedge;
     Vault public vRisk;
 
-    Y2KEarthquakeV1InsuranceProvider public provider;
+    IInsuranceProvider public provider;
     SelfInsuredVault public vault;
 
     function setUp() public {
@@ -115,10 +115,10 @@ contract DeployFakeSelfInsuredVaultScript is BaseScript {
 
     function providerForIndex(uint256 marketIndex, address beneficiary) public returns (IInsuranceProvider) {
         console.log("Looking up vHedge for", marketIndex);
-        address vHedge = address(vaultFactory.getVaults(marketIndex)[0]);
-        console.log("Got", vHedge);
+        vHedge = Vault(vaultFactory.getVaults(marketIndex)[0]);
+        console.log("Got", address(vHedge));
 
-        IInsuranceProvider provider = IInsuranceProvider(new Y2KEarthquakeV1InsuranceProvider(vHedge, beneficiary));
+        provider = IInsuranceProvider(new Y2KEarthquakeV1InsuranceProvider(address(vHedge), beneficiary));
 
         console.log("Next epoch", provider.nextEpoch());
         console.log("Next epoch purch", provider.isNextEpochPurchasable());

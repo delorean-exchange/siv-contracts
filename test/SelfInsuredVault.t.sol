@@ -64,8 +64,8 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
     SelfInsuredVault vault;
     Y2KEarthquakeV1InsuranceProvider provider;
 
-    function epochPayout(SelfInsuredVault vault, address provider, uint256 index) internal view returns (uint256) {
-        ( , , uint256 payout, ) = vault.providerEpochs(provider, index);
+    function epochPayout(SelfInsuredVault vault_, address provider_, uint256 index) internal view returns (uint256) {
+        ( , , uint256 payout, ) = vault_.providerEpochs(provider_, index);
         return payout;
     }
 
@@ -432,8 +432,6 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         vault.deposit(3e18, ALICE);
         vm.stopPrank();
 
-        /* vault.pprintEpochs(); */
-
         {
             (uint256 epochId0, uint256 totalShares0, , ) = vault.providerEpochs(address(provider), 0);
             assertEq(totalShares0, 0);
@@ -474,9 +472,9 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
 
         // TODO: Consolidate this setup code
         // -- Set up Delorean market --/
-        YieldData dataDebt = new YieldData(20);
-        YieldData dataCredit = new YieldData(20);
-        Discounter discounter = new Discounter(1e13, 500, 360, 18);
+        dataDebt = new YieldData(20);
+        dataCredit = new YieldData(20);
+        discounter = new Discounter(1e13, 500, 360, 18);
 
         FakeYieldSource dlxSource = source;
         slice = new YieldSlice("npvETH-FAKE",
@@ -572,16 +570,12 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
 
         vm.warp(beginEpoch + 1);
 
-        console.log("current epoch", provider.currentEpoch());
-        console.log("endEpoch     ", endEpoch);
-
         // Bob buys the risk
         vm.startPrank(BOB);
         vm.deal(BOB, 200 ether);
         IWrappedETH(WETH).deposit{value: 200 ether}();
         IERC20(WETH).approve(address(vRisk), 200e18);
         vRisk.deposit(endEpoch + 1 days, 200e18, BOB);
-        console.log("Bob bought risk for:", endEpoch + 1 days);
         vm.stopPrank();
 
         // Set the insurance provider at 10% of expected yield
@@ -605,24 +599,11 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         controller.triggerDepeg(SINGLE_MARKET_INDEX, endEpoch + 1 days);
 
         vm.startPrank(address(controller));
-        console.log("End these epochs:", endEpoch + 1 days);
         vHedge.endEpoch(endEpoch);
         vHedge.endEpoch(endEpoch + 1 days);
         vRisk.endEpoch(endEpoch);
         vRisk.endEpoch(endEpoch + 1 days);
         vm.stopPrank();
-
-        console.log("");
-        console.log("");
-
-        /* vault._updateEpochInfos(0); */
-        vault.pprintEpochs();
-
-        console.log("");
-        console.log("");
-        console.log("====");
-        console.log("");
-        console.log("");
 
         vault.claimVaultPayouts();
 
@@ -636,8 +617,6 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         vault.claimVaultPayouts();
         assertEq(epochPayout(vault, address(provider), 1), 199000000000024154370);
         assertEq(IERC20(WETH).balanceOf(address(vault)), 199000000043502021492);
-
-        vault.pprintEpochs();
 
         // Alice claims rewards
         {
@@ -673,8 +652,6 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
             assertEq(delta, 5e17);
             assertEq(vault.balanceOf(ALICE), 0);
         }
-
-        vault.pprintEpochs();
     }
 
     function testDoubleAddRewardToken() public {

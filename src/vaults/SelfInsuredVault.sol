@@ -28,8 +28,30 @@ contract SelfInsuredVault is ERC20 {
                    uint256 assets,
                    uint256 shares);
 
-    event ClaimPayouts(address indexed user,
-                       uint256 amount);
+    event ClaimPayouts(address indexed user, uint256 amount);
+
+    event ClaimVaultPayouts(address indexed provider,
+                            uint256 providerIndex,
+                            uint256 epochIndex,
+                            uint256 amount);
+
+    event ClaimRewards(address indexed user, address indexed token, uint256 amount);
+    event Harvest(address indexed token, uint256 amount);
+    event Admin(address indexed user);
+    event DeloreanSwap(address indexed swap);
+    event AddRewardToken(address indexed token);
+    event AddInsuranceProvider(address indexed provider, uint256 weight);
+    event SetWeight(address indexed provider, uint256 index, uint256 weight);
+
+    event PurchaseInsuranceForProvider(address indexed provider,
+                                       uint256 indexed currentEpochId,
+                                       uint256 providerIndex,
+                                       uint256 amount);
+
+    event PurchaseInsuranceForEpoch(uint256 minBps,
+                                    uint256 epochProjectedYield);
+
+    event Unlock(uint256 indexed dlxId);
 
     // -- Insurance payouts tracking -- //
 
@@ -263,13 +285,19 @@ contract SelfInsuredVault is ERC20 {
         yieldSource.harvest();
         globalYieldInfos[address(yieldSource.yieldToken())].harvestedYield += pending;
 
+        emit Harvest(address(yieldSource.yieldToken()), pending);
+
         // Harvest reward tokens in slots 1+, which are simply transferred into
         // the contract
         for (uint8 i = 1; i < uint8(rewardTokens.length); i++) {
             address t = address(rewardTokens[i]);
             GlobalYieldInfo storage gyInfo = globalYieldInfos[t];
-            gyInfo.harvestedYield = (IERC20(t).balanceOf(address(this)) +
-                                     gyInfo.claimedYield);
+            uint256 harvestedYield = (IERC20(t).balanceOf(address(this)) +
+                                      gyInfo.claimedYield);
+            uint256 delta = harvestedYield - gyInfo.harvestedYield;
+            gyInfo.harvestedYield = harvestedYield;
+
+            emit Harvest(t, delta);
         }
     }
 
@@ -356,24 +384,7 @@ contract SelfInsuredVault is ERC20 {
         return deltaAccumulatedPayouts;
     }
 
-    function pprintEpochs() external {
-        for (uint256 i = 0; i < providers.length; i++) {
-            IInsuranceProvider provider = providers[i];
-            EpochInfo[] storage epochs = providerEpochs[address(provider)];
-            for (uint256 j = 0; j < epochs.length; j++) {
-                console.log("----");
-                console.log("Epoch", j);
-                console.log("- epochId    ", epochs[j].epochId);
-                console.log("- totalShares", epochs[j].totalShares);
-                console.log("- payout     ", epochs[j].payout);
-                console.log("- premiumPaid", epochs[j].premiumPaid);
-            }
-        }
-        console.log("----");
-    }
-
-    /* function _updateEpochInfos(uint256 i) internal { */
-    function _updateEpochInfos(uint256 i) public {
+    function _updateEpochInfos(uint256 i) internal {
         // The _updateEpochInfos() method is responsible for
         // maintaining the following invariants for each array of
         // EpochInfo's:
@@ -486,6 +497,8 @@ contract SelfInsuredVault is ERC20 {
 
             IERC20(rewardTokens[i]).safeTransfer(msg.sender, owed[i]);
             globalYieldInfos[t].claimedYield += owed[i];
+
+            emit ClaimRewards(msg.sender, t, owed[i]);
         }
 
         return owed;
@@ -538,12 +551,16 @@ contract SelfInsuredVault is ERC20 {
     function setAdmin(address admin_) external onlyAdmin {
         require(admin != address(0), "SIV: zero admin");
         admin = admin_;
+
+        emit Admin(admin_);
     }
 
     function setDeloreanSwap(address dlxSwap_) external onlyAdmin {
         _unlockIfPossible();
         require(dlxId == 0, "SIV: non zero dlx id");
         dlxSwap = NPVSwap(dlxSwap_);
+
+        emit DeloreanSwap(dlxSwap_);
     }
 
     function addRewardToken(address rewardToken) external onlyAdmin {
@@ -552,6 +569,8 @@ contract SelfInsuredVault is ERC20 {
             require(rewardTokens[i] != rewardToken, "SIV: duplicate reward token");
         }
         rewardTokens.push(rewardToken);
+
+        emit AddRewardToken(rewardToken);
     }
 
     function addInsuranceProvider(IInsuranceProvider provider_, uint256 weight_) external onlyAdmin {
@@ -573,6 +592,8 @@ contract SelfInsuredVault is ERC20 {
 
         providers.push(provider_);
         weights.push(weight_);
+
+        emit AddInsuranceProvider(address(provider_), weight_);
     }
 
     function setWeight(uint256 index, uint256 weight_) external onlyAdmin {
@@ -586,6 +607,8 @@ contract SelfInsuredVault is ERC20 {
         require(sum < MAX_COMBINED_WEIGHT, "SIV: max weight");
 
         weights[index] = weight_;
+
+        emit SetWeight(address(providers[index]), index, weight_);
     }
 
     function pendingInsurancePayouts() external view returns (uint256) {
@@ -608,6 +631,8 @@ contract SelfInsuredVault is ERC20 {
                 uint256 epochId = providerEpochs[provider][j].epochId;
                 uint256 amount = providers[i].claimPayouts(epochId);
                 providerEpochs[provider][j].payout += amount;
+
+                emit ClaimVaultPayouts(provider, i, j, amount);
             }
         }
 
@@ -630,12 +655,20 @@ contract SelfInsuredVault is ERC20 {
         IERC20(provider.paymentToken()).approve(address(provider), amount);
         provider.purchaseForNextEpoch(amount);
         terminal.premiumPaid = amount;
+
+        emit PurchaseInsuranceForProvider(address(provider),
+                                          provider.currentEpoch(),
+                                          i,
+                                          amount);
     }
 
     function _unlockIfPossible() internal {
         if (dlxId == 0) return;
         if (dlxSwap.slice().remaining(dlxId) != 0) return;
         dlxSwap.slice().unlockDebtSlice(dlxId);
+
+        emit Unlock(dlxId);
+
         dlxId = 0;
     }
 
@@ -674,5 +707,7 @@ contract SelfInsuredVault is ERC20 {
             if (amount == 0) continue;
             _purchaseForNextEpoch(i, amount);
         }
+
+        emit PurchaseInsuranceForEpoch(minBps, epochProjectedYield);
     }
 }
