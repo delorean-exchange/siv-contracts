@@ -1,4 +1,4 @@
-y2k-earthquake/=lib/Earthquake/
+y2k-earthquake/=lib/Earthquake-dlx/
 dlx/=lib/dlx-contracts/
 openzeppelin/=lib/openzeppelin-contracts/contracts/
 forge-std/=lib/forge-std/src/

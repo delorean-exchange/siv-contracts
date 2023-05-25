@@ -455,8 +455,6 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
             assertEq(accumulatedPayouts, 0);
             assertEq(claimedPayouts, 0);
         }
-
-        // TODO: finish this test, or delete it as it is covered by the one below
     }
 
     function testPurchaseWithDLXFutureYield() public {
@@ -470,11 +468,10 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         yt = IERC20(source.yieldToken());
         source.mintBoth(ALICE, 10e18);
 
-        // TODO: Consolidate this setup code
         // -- Set up Delorean market --/
         dataDebt = new YieldData(20);
         dataCredit = new YieldData(20);
-        discounter = new Discounter(1e13, 500, 360, 18);
+        discounter = new Discounter(1e13, 500 * 30, 360, 18, 30 days);
 
         FakeYieldSource dlxSource = source;
         slice = new YieldSlice("npvETH-FAKE",
@@ -591,7 +588,8 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         vm.stopPrank();
 
         vm.prank(ADMIN);
-        vault.purchaseInsuranceForNextEpoch(99_00, 484807680000);
+
+        vault.purchaseInsuranceForNextEpoch(95_00, 484807680000);
 
         // Trigger a depeg
         vm.warp(endEpoch + 1 minutes);
@@ -609,20 +607,20 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
 
         assertTrue(IERC20(WETH).balanceOf(address(vault)) > 199e18);
         assertTrue(IERC20(WETH).balanceOf(address(vault)) >= epochPayout(vault, address(provider), 1));
-        assertEq(IERC20(WETH).balanceOf(address(vault)), 199000000043502021492);
+        assertEq(IERC20(WETH).balanceOf(address(vault)), 199000000042807782417);
 
-        assertEq(epochPayout(vault, address(provider), 1), 199000000000024154370);
+        assertEq(epochPayout(vault, address(provider), 1), 199000000000023768896);
 
         // Redundant claim should not change it
         vault.claimVaultPayouts();
-        assertEq(epochPayout(vault, address(provider), 1), 199000000000024154370);
-        assertEq(IERC20(WETH).balanceOf(address(vault)), 199000000043502021492);
+        assertEq(epochPayout(vault, address(provider), 1), 199000000000023768896);
+        assertEq(IERC20(WETH).balanceOf(address(vault)), 199000000042807782417);
 
         // Alice claims rewards
         {
             uint256[] memory previewRewards = vault.previewClaimRewards(ALICE);
             uint256 previewPayouts = vault.previewClaimPayouts(ALICE);
-            assertEq(previewPayouts, 199000000000024154370);
+            assertEq(previewPayouts, 199000000000023768896);
             assertEq(previewPayouts, epochPayout(vault, address(provider), 1));
         }
 
@@ -630,7 +628,7 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
             uint256 before = IERC20(WETH).balanceOf(ALICE);
             vm.prank(ALICE);
             vault.claimPayouts();
-            assertEq(IERC20(WETH).balanceOf(ALICE) - before, 199000000000024154370);
+            assertEq(IERC20(WETH).balanceOf(ALICE) - before, 199000000000023768896);
         }
 
         // Partial withdraw from the vault
