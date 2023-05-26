@@ -8,6 +8,8 @@ import {ERC20} from "openzeppelin/token/ERC20/ERC20.sol";
 import {IERC20} from "openzeppelin/token/ERC20/IERC20.sol";
 import {SafeERC20} from "openzeppelin/token/ERC20/utils/SafeERC20.sol";
 import {SafeCast} from "openzeppelin/utils/math/SafeCast.sol";
+import {IERC1155} from "openzeppelin/token/ERC1155/IERC1155.sol";
+import {ERC1155Holder} from "openzeppelin/token/ERC1155/utils/ERC1155Holder.sol";
 
 import {IYieldSource} from "../interfaces/IYieldSource.sol";
 import {IInsuranceProvider} from "../interfaces/IInsuranceProvider.sol";
@@ -17,10 +19,12 @@ import {IInsuranceProvider} from "../interfaces/IInsuranceProvider.sol";
 // - accurate share calculation(shares deposited during epoch is not eligible for that epoch)
 // - calc payout based on deposited rewards
 
+// we assume all markets accept the same token
+
 /// @title Self Insured Vault(SIV) contract
-/// @author Delorean Exchange x Y2K Finance
+/// @author Y2K Finance
 /// @dev All function calls are currently implemented without side effects
-contract SelfInsuredVault is Ownable {
+contract SelfInsuredVault is Ownable, ERC1155Holder {
     using SafeERC20 for IERC20;
     using SafeCast for int256;
 
@@ -29,9 +33,15 @@ contract SelfInsuredVault is Ownable {
         int256 payoutDebt;
     }
 
+    struct MarketInfo {
+        address provider;
+        uint256 marketId;
+        uint256 premiumWeight;
+        uint256 collateralWeight;
+    }
+
     uint256 public constant PRECISION_FACTOR = 10 ** 18;
-    uint256 public constant MAX_COMBINED_WEIGHT = 20_00;
-    uint256 public constant MAX_PROVIDERS = 10;
+    uint256 public constant MAX_MARKETS = 10;
 
     // -- Global State -- //
 
@@ -44,11 +54,8 @@ contract SelfInsuredVault is Ownable {
     /// @notice Yield source contract
     IYieldSource public immutable yieldSource;
 
-    /// @notice Array of Insurance Providers, i.e strategies for different vaults
-    IInsuranceProvider[] public providers;
-
-    /// @notice Weight of each insurance vaults
-    uint256[] public weights;
+    /// @notice Array of Market Ids for investment
+    MarketInfo[] public markets;
 
     /// @notice Total weight
     uint256 public totalWeight;
@@ -89,39 +96,50 @@ contract SelfInsuredVault is Ownable {
 
     /**
      * @notice Add a new insurance provider
-     * @dev We assume the epoch duration of every vault are the same TODO: why?
-     * @param _provider New insurance provider
-     * @param _weight Weight of new insurance provider
+     * @param _provider Insurance provider being used as router
+     * @param _marketId Market id
+     * @param _premiumWeight Weight of premium vault inside market
+     * @param _collateralWeight Weight of collateral vault inside market
      */
-    function addInsuranceProvider(
-        IInsuranceProvider _provider,
-        uint256 _weight
+    function addMarket(
+        address _provider, // v1, v2
+        uint256 _marketId,
+        uint256 _premiumWeight,
+        uint256 _collateralWeight
     ) external onlyOwner {
-        require(
-            providers.length == 0 ||
-                _provider.epochDuration() == providers[0].epochDuration(),
-            "SIV: same duration"
+        require(markets.length < MAX_MARKETS, "SIV: max markets");
+
+        address[2] memory vaults = IInsuranceProvider(_provider).getVaults(_marketId);
+        IERC1155(vaults[0]).setApprovalForAll(_provider, true);
+        IERC1155(vaults[1]).setApprovalForAll(_provider, true);
+
+        // tODO does this market share the same paymentToken?
+        totalWeight += _premiumWeight + _collateralWeight;
+        markets.push(
+            MarketInfo(_provider, _marketId, _premiumWeight, _collateralWeight)
         );
-        require(_provider.paymentToken() == paymentToken, "SIV: payment token");
-        require(providers.length < MAX_PROVIDERS, "SIV: max providers");
-
-        totalWeight += _weight;
-        require(totalWeight < MAX_COMBINED_WEIGHT, "SIV: max weight");
-
-        providers.push(_provider);
-        weights.push(_weight);
     }
 
     /**
-     * @notice Set weight of insurance provider
-     * @param index of insurance provider
-     * @param _weight new weight
+     * @notice Set weight of market
+     * @param index of market
+     * @param _premiumWeight new weight of premium vault
+     * @param _collateralWeight new weight of collateral vault
      */
-    function setWeight(uint256 index, uint256 _weight) external onlyOwner {
-        require(index < providers.length, "SIV: invalid index");
-        totalWeight = totalWeight + _weight - weights[index];
-        require(totalWeight < MAX_COMBINED_WEIGHT, "SIV: max weight");
-        weights[index] = _weight;
+    function setWeight(
+        uint256 index,
+        uint256 _premiumWeight,
+        uint256 _collateralWeight
+    ) external onlyOwner {
+        require(index < markets.length, "SIV: invalid index");
+        totalWeight =
+            totalWeight +
+            _premiumWeight +
+            _collateralWeight -
+            markets[index].premiumWeight -
+            markets[index].collateralWeight;
+        markets[index].premiumWeight = _premiumWeight;
+        markets[index].collateralWeight = _collateralWeight;
     }
 
     /**
@@ -137,11 +155,25 @@ contract SelfInsuredVault is Ownable {
         );
 
         // Purchase insurance via Y2K
-        for (uint256 i = 0; i < providers.length; i++) {
-            uint256 amount = (actualOut * weights[i]) / totalWeight;
-            if (amount > 0) {
-                _purchaseForNextEpoch(i, amount);
-            }
+        for (uint256 i = 0; i < markets.length; i++) {
+            MarketInfo memory market = markets[i];
+            IInsuranceProvider provider = IInsuranceProvider(market.provider);
+            require(
+                provider.isNextEpochPurchasable(market.marketId),
+                "SIV: not purchasable"
+            );
+
+            uint256 premiumAmount = (actualOut * market.premiumWeight) /
+                totalWeight;
+            uint256 collateralAmount = (actualOut * market.collateralWeight) /
+                totalWeight;
+            uint256 totalAmount = premiumAmount + collateralAmount;
+            paymentToken.safeApprove(address(provider), totalAmount);
+            provider.purchaseForNextEpoch(
+                market.marketId,
+                premiumAmount,
+                collateralAmount
+            );
         }
     }
 
@@ -150,10 +182,10 @@ contract SelfInsuredVault is Ownable {
     //////////////////////////////////////////////////////////////*/
 
     /**
-     * @notice Returns count of providers
+     * @notice Returns count of markets
      */
-    function providersLength() public view returns (uint256) {
-        return providers.length;
+    function marketsLength() public view returns (uint256) {
+        return markets.length;
     }
 
     /**
@@ -161,8 +193,11 @@ contract SelfInsuredVault is Ownable {
      */
     function pendingInsurancePayouts() public view returns (uint256) {
         uint256 sum = 0;
-        for (uint256 i = 0; i < providers.length; i++) {
-            sum += providers[i].pendingPayouts();
+        for (uint256 i = 0; i < markets.length; i++) {
+            IInsuranceProvider provider = IInsuranceProvider(
+                markets[i].provider
+            );
+            sum += provider.pendingPayouts(markets[i].marketId);
         }
         return sum;
     }
@@ -256,8 +291,12 @@ contract SelfInsuredVault is Ownable {
     function claimVaultPayouts() public {
         uint256 totalShares = yieldSource.totalDeposit();
         uint256 newPayout;
-        for (uint256 i = 0; i < providers.length; i++) {
-            newPayout += providers[i].claimPayouts();
+        for (uint256 i = 0; i < markets.length; i++) {
+            IInsuranceProvider provider = IInsuranceProvider(markets[i].provider);
+            uint256 marketId = markets[i].marketId;
+            newPayout += provider.claimPayouts(
+                marketId
+            );
         }
         if (totalShares != 0) {
             accPayoutPerShare =
@@ -265,22 +304,5 @@ contract SelfInsuredVault is Ownable {
                 (newPayout * PRECISION_FACTOR) /
                 totalShares;
         }
-    }
-
-    /*//////////////////////////////////////////////////////////////
-                                INTERNAL
-    //////////////////////////////////////////////////////////////*/
-
-    /**
-     * @notice Purchase next epoch
-     * @param i Index of provider
-     * @param amount of tokens for purchase
-     */
-    function _purchaseForNextEpoch(uint256 i, uint256 amount) internal {
-        IInsuranceProvider provider = providers[i];
-        require(provider.isNextEpochPurchasable(), "SIV: not purchasable");
-
-        paymentToken.safeTransfer(address(provider), amount);
-        provider.purchaseForNextEpoch(amount);
     }
 }

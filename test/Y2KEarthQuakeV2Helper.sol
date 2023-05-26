@@ -9,11 +9,14 @@ import "y2k-earthquake/src/v2/VaultV2.sol";
 import "y2k-earthquake/src/v2/Controllers/ControllerPeggedAssetV2.sol";
 import "y2k-earthquake/src/v2/interfaces/IWETH.sol";
 
+import {Y2KEarthquakeV2InsuranceProvider} from "../src/providers/Y2KEarthquakeV2InsuranceProvider.sol";
+
 contract Y2KEarthQuakeV2Helper is Helper {
     using FixedPointMathLib for uint256;
 
     VaultFactoryV2 public factory;
     ControllerPeggedAssetV2 public controller;
+    Y2KEarthquakeV2InsuranceProvider public insuranceProvider;
 
     address public premium;
     address public collateral;
@@ -48,6 +51,8 @@ contract Y2KEarthQuakeV2Helper is Helper {
             );
         
         controller = new ControllerPeggedAssetV2(address(factory), ARBITRUM_SEQUENCER, TREASURY);
+
+        insuranceProvider = new Y2KEarthquakeV2InsuranceProvider(address(factory));
 
         factory.whitelistController(address(controller));
     }

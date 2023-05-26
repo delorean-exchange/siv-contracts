@@ -1,71 +1,65 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
+import "forge-std/console.sol";
 import {IERC20} from "openzeppelin/token/ERC20/IERC20.sol";
 import {SafeERC20} from "openzeppelin/token/ERC20/utils/SafeERC20.sol";
-import {ERC1155Holder} from "openzeppelin/token/ERC1155/utils/ERC1155Holder.sol";
-import {Vault} from "y2k-earthquake/src/legacy_v1/Vault.sol";
+import {Math} from "openzeppelin/utils/math/Math.sol";
+import {IERC1155} from "openzeppelin/token/ERC1155/IERC1155.sol";
 
 import {IInsuranceProvider} from "../interfaces/IInsuranceProvider.sol";
+import {IVaultFactory} from "y2k-earthquake/src/legacy_v1/interfaces/IVaultFactory.sol";
+import {IVault} from "y2k-earthquake/src/legacy_v1/interfaces/IVault.sol";
+
+interface IVaultFactoryCustom {
+    function WETH() external returns (address);
+}
 
 /// @title Insurance Provider for Y2k Earthquake v1
-/// @author Delorean Exchange x Y2K Finance
+/// @author Y2K Finance
 /// @dev All function calls are currently implemented without side effects
-contract Y2KEarthquakeV1InsuranceProvider is
-    IInsuranceProvider,
-    ERC1155Holder
-{
+contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider {
     using SafeERC20 for IERC20;
 
-    /// @notice Earthquake vault
-    Vault public vault;
+    address public immutable WETH;
 
-    /// @notice Token for insurance
-    IERC20 public override insuredToken;
+    /// @notice Earthquake vault factory
+    IVaultFactory public immutable vaultFactory;
 
-    /// @notice Token for payment of insurance
-    IERC20 public override paymentToken;
-
-    /// @notice Y2k reward token
-    IERC20 public constant override rewardToken =
-        IERC20(0x65c936f008BC34fE819bce9Fa5afD9dc2d49977f); // Y2K token
-
-    /// @notice Last claimed epoch index
-    uint256 public nextEpochIndexToClaim;
+    /// @notice Last claimed epoch index; Market Id => Epoch Index
+    mapping(uint256 => uint256) public nextEpochIndexToClaim;
 
     /*//////////////////////////////////////////////////////////////
                                 CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
-
     /**
      * @notice Constructor
-     * @param _vault Address of Earthquake vault.
+     * @param _vaultFactory Address of Earthquake v1 vault factory.
      */
-    constructor(address _vault) {
-        _setInsuranceVault(_vault);
-    }
-
-    /*//////////////////////////////////////////////////////////////
-                                SETTERS
-    //////////////////////////////////////////////////////////////*/
-
-    /**
-     * @notice Set vault address. Only owner can call do this.
-     * @param _vault Address of Earthquake vault.
-     */
-    function setInsuranceVault(address _vault) public onlyOwner {
-        _setInsuranceVault(_vault);
+    constructor(address _vaultFactory) {
+        require(_vaultFactory != address(0), "VaultFactory zero address");
+        vaultFactory = IVaultFactory(_vaultFactory);
+        WETH = IVaultFactoryCustom(_vaultFactory).WETH();
     }
 
     /*//////////////////////////////////////////////////////////////
                                 GETTERS
     //////////////////////////////////////////////////////////////*/
+    /**
+     * @notice Returns vault addresses.
+     * @param marketId Market Id
+     */
+    function getVaults(uint256 marketId) public view returns (address[2] memory vaults) {
+        vaults[0] = vaultFactory.indexVaults(marketId, 0);
+        vaults[1] = vaultFactory.indexVaults(marketId, 1);
+    }
 
     /**
      * @notice Returns the current epoch.
      * @dev If epoch iteration takes long, then we can think of binary search
+     * @param vault Earthquake vault
      */
-    function currentEpoch() public override view returns (uint256) {
+    function currentEpoch(IVault vault) public view returns (uint256) {
         uint256 len = vault.epochsLength();
         if (len > 0) {
             for (uint256 i = len - 1; i >= 0; i--) {
@@ -89,72 +83,56 @@ contract Y2KEarthquakeV1InsuranceProvider is
 
     /**
      * @notice Returns the next epoch.
-     * @dev We assum last epoch is always next epoch
-     *   should we handle the sitaution where there are two epochs at the end,
-     *   both of which are not started? it is unlikely but may happen if there is a
-     *   misconfiguration on Y2K side
+     * @param vault Earthquake vault
      */
-    function nextEpoch() public override view returns (uint256) {
+    function nextEpoch(IVault vault) public view returns (uint256) {
         uint256 len = vault.epochsLength();
         if (len == 0) return 0;
         uint256 epochId = vault.epochs(len - 1);
+        // TODO: should we handle the sitaution where there are two epochs at the end,
+        // both of which are not started? it is unlikely but may happen if there is a
+        // misconfiguration on Y2K side
         if (block.timestamp > vault.idEpochBegin(epochId)) return 0;
         return epochId;
     }
 
-    // TODO: BAD ITERATION, remove by rearchitect
-    /**
-     * @notice Returns the following epoch id.
-     * @param epochId Epoch Id
-     */
-    function followingEpoch(uint256 epochId) external override view returns (uint256) {
-        uint256 len = vault.epochsLength();
-        for (uint256 i = 1; i < len; i++) {
-            if (vault.epochs(i - 1) == epochId) {
-                return vault.epochs(i);
-            }
-        }
-        return 0;
-    }
-
-    /**
-     * @notice Returns the duration of the current epoch.
-     */
-    function epochDuration() external view override returns (uint256) {
-        uint256 id = currentEpoch();
-        return id - vault.idEpochBegin(id);
-    }
-
     /**
      * @notice Is next epoch purchasable.
+     * @param marketId Market Id
      */
-    function isNextEpochPurchasable() external view override returns (bool) {
-        uint256 id = nextEpoch();
+    function isNextEpochPurchasable(uint256 marketId) external view returns (bool) {
+        address[2] memory vaults = getVaults(marketId);
+        IVault vault = IVault(vaults[0]);
+        uint256 id = nextEpoch(vault);
         return id > 0 && block.timestamp <= vault.idEpochBegin(id);
     }
 
     /**
-     * @notice Returns if next epoch is purchased.
-     */
-    function nextEpochPurchased() external override view returns (uint256) {
-        return vault.balanceOf(address(this), nextEpoch());
-    }
-
-    /**
-     * @notice Returns if current epoch is purchased.
-     */
-    function currentEpochPurchased() external override view returns (uint256) {
-        return vault.balanceOf(address(this), currentEpoch());
-    }
-
-    /**
      * @notice Pending payouts.
+     * @param marketId Market Id
      */
-    function pendingPayouts() external view override returns (uint256) {
+    function pendingPayouts(uint256 marketId) external view returns (uint256) {
+        address[2] memory vaults = getVaults(marketId);
+
+        IVault premium = IVault(vaults[0]);
+        IVault collateral = IVault(vaults[1]);
+
         uint256 pending = 0;
-        uint256 len = vault.epochsLength();
-        for (uint256 i = nextEpochIndexToClaim + 1; i < len; i++) {
-            pending += _pendingPayoutForEpoch(vault.epochs(i));
+        uint256 len = premium.epochsLength();
+        for (uint256 i = nextEpochIndexToClaim[marketId] + 1; i < len; i++) {
+            uint256 epochId = premium.epochs(i);
+            if (
+                block.timestamp <= epochId ||
+                !premium.idEpochEnded(epochId) ||
+                !collateral.idEpochEnded(epochId)
+            ) {
+                break;
+            }
+
+            uint256 premiumShares = IERC1155(address(premium)).balanceOf(msg.sender, epochId);
+            uint256 collateralShares = IERC1155(address(collateral)).balanceOf(msg.sender, epochId);
+            pending += premium.previewWithdraw(epochId, premiumShares);
+            pending += collateral.previewWithdraw(epochId, collateralShares);
         }
         return pending;
     }
@@ -162,7 +140,7 @@ contract Y2KEarthquakeV1InsuranceProvider is
     /**
      * @notice Pending rewards, zero for now.
      */
-    function pendingRewards() external view override returns (uint256) {
+    function pendingRewards(uint256) external view returns (uint256) {
         return 0;
     }
 
@@ -172,89 +150,73 @@ contract Y2KEarthquakeV1InsuranceProvider is
 
     /**
      * @notice Purchase next epoch.
+     * @param marketId Market Id
      * @param amountPremium Premium amount for insurance
+     * @param amountCollateral Collateral amount for insurance
      */
     function purchaseForNextEpoch(
-        uint256 amountPremium
-    ) external override onlyOwner {
-        paymentToken.safeTransferFrom(msg.sender, address(this), amountPremium);
-        paymentToken.safeApprove(address(vault), amountPremium);
-        vault.deposit(nextEpoch(), amountPremium, address(this));
+        uint256 marketId,
+        uint256 amountPremium,
+        uint256 amountCollateral
+    ) external {
+        address[2] memory vaults = getVaults(marketId);
+        IERC20(WETH).safeTransferFrom(msg.sender, address(this), amountPremium + amountCollateral);
+        IERC20(WETH).safeApprove(vaults[0], amountPremium);
+        IERC20(WETH).safeApprove(vaults[1], amountCollateral);
+
+        uint256 nextEpochId = nextEpoch(IVault(vaults[0]));
+        IVault(vaults[0]).deposit(nextEpochId, amountPremium, msg.sender);
+        IVault(vaults[1]).deposit(nextEpochId, amountCollateral, msg.sender);
     }
 
     /**
-     * @notice Claim payouts.
+     * @notice Claims payout for the resolved epochs.
+     * @param marketId Market Id
      */
-    function claimPayouts() external override returns (uint256 amount) {
-        uint256 len = vault.epochsLength();
-        uint256 i = nextEpochIndexToClaim;
+    function claimPayouts(uint256 marketId) external returns (uint256 amount) {
+        address[2] memory vaults = getVaults(marketId);
+
+        IVault premium = IVault(vaults[0]);
+        IVault collateral = IVault(vaults[1]);
+
+        uint256 i = nextEpochIndexToClaim[marketId];
+        uint256 len = premium.epochsLength();
         for (; i < len; i++) {
-            uint256 epochId = vault.epochs(i);
+            uint256 epochId = premium.epochs(i);
             if (
                 block.timestamp <= epochId ||
-                !vault.idEpochEnded(epochId)
+                !premium.idEpochEnded(epochId) ||
+                !collateral.idEpochEnded(epochId)
             ) {
                 break;
             }
 
-            uint256 assets = vault.balanceOf(address(this), epochId);
-            amount += vault.withdraw(
-                epochId,
-                assets,
-                address(this),
-                address(this)
-            );
+            uint256 premiumShares = IERC1155(address(premium)).balanceOf(msg.sender, epochId);
+            if (premiumShares > 0) {
+                amount += premium.withdraw(
+                    epochId,
+                    premiumShares,
+                    msg.sender,
+                    msg.sender
+                );
+            }
+            uint256 collateralShares = IERC1155(address(collateral)).balanceOf(msg.sender, epochId);
+            if (collateralShares > 0) {
+                amount += collateral.withdraw(
+                    epochId,
+                    collateralShares,
+                    msg.sender,
+                    msg.sender
+                );
+            }
         }
-        nextEpochIndexToClaim = i;
-        if (amount > 0) {
-            paymentToken.safeTransfer(msg.sender, amount);
-        }
+        nextEpochIndexToClaim[marketId] = i;
     }
 
     /**
      * @notice Claim rewards, zero for now.
      */
-    function claimRewards() external override returns (uint256) {
+    function claimRewards(uint256) external returns (uint256) {
         return 0;
-    }
-
-    /*//////////////////////////////////////////////////////////////
-                                INTERNAL
-    //////////////////////////////////////////////////////////////*/
-
-    /**
-     * @notice Set vault address.
-     * @dev Last claimed epoch index is also updated to 0.
-     * @param _vault Address of Earthquake vault.
-     */
-    function _setInsuranceVault(address _vault) internal {
-        require(_vault != address(vault), "Vault already set");
-        vault = Vault(_vault);
-        insuredToken = IERC20(address(vault.tokenInsured()));
-        paymentToken = IERC20(address(vault.asset()));
-        nextEpochIndexToClaim = 0;
-    }
-
-    /**
-     * @notice Returns pending payouts for specifc epoch.
-     * @param epochId Epoch Id
-     * @return entitledShares Payout amount
-     */
-    function _pendingPayoutForEpoch(
-        uint256 epochId
-    ) internal view returns (uint256 entitledShares) {
-        if (vault.idFinalTVL(epochId) == 0) return 0;
-        uint256 assets = vault.balanceOf(address(this), epochId);
-        entitledShares = vault.previewWithdraw(epochId, assets);
-        // Mirror Y2K Vault logic for deducting fee
-        if (entitledShares > assets) {
-            uint256 premium = entitledShares - assets;
-            uint256 feeValue = vault.calculateWithdrawalFeeValue(
-                premium,
-                epochId
-            );
-            entitledShares = entitledShares - feeValue;
-        }
-        return entitledShares;
     }
 }
