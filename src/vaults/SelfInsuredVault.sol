@@ -518,6 +518,8 @@ contract SelfInsuredVault is ERC20 {
 
             EpochInfo[] storage infos = providerEpochs[address(provider)];
 
+            if (infos.length == 0) continue;
+
             // TODO: GAS: Use nextId field + mapping instead of list
             // Loop skips the last (zero ID) EpochInfo
             for (uint256 j = 0; j < infos.length - 1; j++) {
