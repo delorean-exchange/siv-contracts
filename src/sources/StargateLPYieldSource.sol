@@ -3,7 +3,6 @@ pragma solidity ^0.8.13;
 
 import {SafeERC20} from "openzeppelin/token/ERC20/utils/SafeERC20.sol";
 import {IERC20} from "openzeppelin/token/ERC20/IERC20.sol";
-import {Ownable} from "openzeppelin/access/Ownable.sol";
 
 import {IUniswapV2Router02} from "uniswap-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 
@@ -14,7 +13,7 @@ import {ILPStaking} from "../interfaces/stargate/ILPStaking.sol";
 /// @author Y2K Finance
 /// @dev This is for reward management by LP staking, not yield bearing asset
 ///      Owner of this contract is always SIV
-contract StargateLPYieldSource is IYieldSource, Ownable {
+contract StargateLPYieldSource is IYieldSource {
     using SafeERC20 for IERC20;
 
     /// @notice LP token
@@ -41,26 +40,41 @@ contract StargateLPYieldSource is IYieldSource, Ownable {
      */
     constructor(
         uint256 _pid,
-        IERC20 _lpToken,
-        ILPStaking _staking,
-        IUniswapV2Router02 _router
+        address _lpToken,
+        address _staking,
+        address _router
     ) {
-        require(address(_lpToken) != address(0), "LP: zero address");
-        require(address(_staking) != address(0), "Staking: zero address");
+        require(_lpToken != address(0), "LP: zero address");
+        require(_staking != address(0), "Staking: zero address");
+        require(_router != address(0), "Staking: zero address");
 
         pid = _pid;
-        staking = _staking;
-        sourceToken = _lpToken;
-        router = _router;
+        staking = ILPStaking(_staking);
+        sourceToken = IERC20(_lpToken);
+        router = IUniswapV2Router02(_router);
         yieldToken = IERC20(staking.stargate());
     }
 
     /**
      * @notice Returns pending STG yield
      */
-    function pendingYield() external view override returns (uint256) {
+    function pendingYield() public view override returns (uint256) {
         uint256 balance = yieldToken.balanceOf(address(this));
         return balance + staking.pendingStargate(pid, address(this));
+    }
+
+    /**
+     * @notice Returns expected token from yield
+     */
+    function pendingYieldInToken(address outToken) external view override returns (uint256 amountOut) {
+        uint256 amountIn = pendingYield();
+        if (amountIn > 0) {
+            address[] memory path = new address[](2);
+            path[0] = address(yieldToken);
+            path[1] = outToken;
+            uint256[] memory amounts = router.getAmountsOut(amountIn, path);
+            amountOut = amounts[amounts.length - 1];
+        }
     }
 
     /**
@@ -102,7 +116,7 @@ contract StargateLPYieldSource is IYieldSource, Ownable {
      * @notice Harvest rewards
      */
     function harvestAndConvert(
-        IERC20 outToken,
+        address outToken,
         uint256 amount
     ) external override onlyOwner returns (uint256 yieldAmount, uint256 actualOut) {
         // harvest by withdraw
@@ -117,7 +131,7 @@ contract StargateLPYieldSource is IYieldSource, Ownable {
             yieldToken.safeApprove(address(router), amount);
             address[] memory path = new address[](2);
             path[0] = address(yieldToken);
-            path[1] = address(outToken);
+            path[1] = outToken;
             uint256[] memory amounts = router.swapExactTokensForTokens(amount, 0, path, msg.sender, block.timestamp);
             actualOut = amounts[amounts.length - 1];
         }

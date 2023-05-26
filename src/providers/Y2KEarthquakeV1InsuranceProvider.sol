@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {Ownable} from "openzeppelin/access/Ownable.sol";
 import {IERC20} from "openzeppelin/token/ERC20/IERC20.sol";
 import {SafeERC20} from "openzeppelin/token/ERC20/utils/SafeERC20.sol";
 import {ERC1155Holder} from "openzeppelin/token/ERC1155/utils/ERC1155Holder.sol";
@@ -14,7 +13,6 @@ import {IInsuranceProvider} from "../interfaces/IInsuranceProvider.sol";
 /// @dev All function calls are currently implemented without side effects
 contract Y2KEarthquakeV1InsuranceProvider is
     IInsuranceProvider,
-    Ownable,
     ERC1155Holder
 {
     using SafeERC20 for IERC20;
@@ -33,10 +31,7 @@ contract Y2KEarthquakeV1InsuranceProvider is
         IERC20(0x65c936f008BC34fE819bce9Fa5afD9dc2d49977f); // Y2K token
 
     /// @notice Last claimed epoch index
-    uint256 public lastClaimedEpochIndex;
-
-    /// @notice Address for payout
-    address public immutable beneficiary;
+    uint256 public nextEpochIndexToClaim;
 
     /*//////////////////////////////////////////////////////////////
                                 CONSTRUCTOR
@@ -45,11 +40,9 @@ contract Y2KEarthquakeV1InsuranceProvider is
     /**
      * @notice Constructor
      * @param _vault Address of Earthquake vault.
-     * @param _beneficiary Address for payout.
      */
-    constructor(address _vault, address _beneficiary) {
+    constructor(address _vault) {
         _setInsuranceVault(_vault);
-        beneficiary = _beneficiary;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -72,7 +65,7 @@ contract Y2KEarthquakeV1InsuranceProvider is
      * @notice Returns the current epoch.
      * @dev If epoch iteration takes long, then we can think of binary search
      */
-    function currentEpoch() public view returns (uint256) {
+    function currentEpoch() public override view returns (uint256) {
         uint256 len = vault.epochsLength();
         if (len > 0) {
             for (uint256 i = len - 1; i >= 0; i--) {
@@ -101,7 +94,7 @@ contract Y2KEarthquakeV1InsuranceProvider is
      *   both of which are not started? it is unlikely but may happen if there is a
      *   misconfiguration on Y2K side
      */
-    function nextEpoch() public view returns (uint256) {
+    function nextEpoch() public override view returns (uint256) {
         uint256 len = vault.epochsLength();
         if (len == 0) return 0;
         uint256 epochId = vault.epochs(len - 1);
@@ -114,7 +107,7 @@ contract Y2KEarthquakeV1InsuranceProvider is
      * @notice Returns the following epoch id.
      * @param epochId Epoch Id
      */
-    function followingEpoch(uint256 epochId) external view returns (uint256) {
+    function followingEpoch(uint256 epochId) external override view returns (uint256) {
         uint256 len = vault.epochsLength();
         for (uint256 i = 1; i < len; i++) {
             if (vault.epochs(i - 1) == epochId) {
@@ -143,14 +136,14 @@ contract Y2KEarthquakeV1InsuranceProvider is
     /**
      * @notice Returns if next epoch is purchased.
      */
-    function nextEpochPurchased() external view returns (uint256) {
+    function nextEpochPurchased() external override view returns (uint256) {
         return vault.balanceOf(address(this), nextEpoch());
     }
 
     /**
      * @notice Returns if current epoch is purchased.
      */
-    function currentEpochPurchased() external view returns (uint256) {
+    function currentEpochPurchased() external override view returns (uint256) {
         return vault.balanceOf(address(this), currentEpoch());
     }
 
@@ -160,7 +153,7 @@ contract Y2KEarthquakeV1InsuranceProvider is
     function pendingPayouts() external view override returns (uint256) {
         uint256 pending = 0;
         uint256 len = vault.epochsLength();
-        for (uint256 i = lastClaimedEpochIndex + 1; i < len; i++) {
+        for (uint256 i = nextEpochIndexToClaim + 1; i < len; i++) {
             pending += _pendingPayoutForEpoch(vault.epochs(i));
         }
         return pending;
@@ -194,8 +187,16 @@ contract Y2KEarthquakeV1InsuranceProvider is
      */
     function claimPayouts() external override returns (uint256 amount) {
         uint256 len = vault.epochsLength();
-        for (uint256 i = lastClaimedEpochIndex + 1; i < len; i++) {
+        uint256 i = nextEpochIndexToClaim;
+        for (; i < len; i++) {
             uint256 epochId = vault.epochs(i);
+            if (
+                block.timestamp <= epochId ||
+                !vault.idEpochEnded(epochId)
+            ) {
+                break;
+            }
+
             uint256 assets = vault.balanceOf(address(this), epochId);
             amount += vault.withdraw(
                 epochId,
@@ -204,8 +205,10 @@ contract Y2KEarthquakeV1InsuranceProvider is
                 address(this)
             );
         }
-        lastClaimedEpochIndex = len - 1;
-        paymentToken.safeTransfer(beneficiary, amount);
+        nextEpochIndexToClaim = i;
+        if (amount > 0) {
+            paymentToken.safeTransfer(msg.sender, amount);
+        }
     }
 
     /**
@@ -229,7 +232,7 @@ contract Y2KEarthquakeV1InsuranceProvider is
         vault = Vault(_vault);
         insuredToken = IERC20(address(vault.tokenInsured()));
         paymentToken = IERC20(address(vault.asset()));
-        lastClaimedEpochIndex = 0;
+        nextEpochIndexToClaim = 0;
     }
 
     /**

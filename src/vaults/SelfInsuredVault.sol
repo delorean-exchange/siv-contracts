@@ -61,9 +61,6 @@ contract SelfInsuredVault is Ownable {
     /// @notice User Share info
     mapping(address => UserInfo) public userInfos;
 
-    /// @notice Epoch Id when deposit, provider => epochId
-    mapping(address => uint256) public depositEpochIds;
-
     // -- Events -- //
 
     /// @notice Emitted when `user` claimed payout
@@ -135,7 +132,7 @@ contract SelfInsuredVault is Ownable {
 
         uint256 totalYield = yieldSource.pendingYield();
         (, uint256 actualOut) = yieldSource.harvestAndConvert(
-            paymentToken,
+            address(paymentToken),
             totalYield
         );
 
@@ -177,8 +174,6 @@ contract SelfInsuredVault is Ownable {
     function pendingPayouts(
         address user
     ) public view returns (uint256 pending) {
-        // TODO: take care of depositEpochIDs
-
         UserInfo storage info = userInfos[user];
         uint256 newAccPayoutPerShare = accPayoutPerShare;
         uint256 totalShares = yieldSource.totalDeposit();
@@ -205,8 +200,6 @@ contract SelfInsuredVault is Ownable {
      */
     function deposit(uint256 amount, address receiver) public {
         claimVaultPayouts();
-
-        // TODO: update depositEpochIds
 
         UserInfo storage user = userInfos[receiver];
         user.share += amount;
@@ -243,8 +236,6 @@ contract SelfInsuredVault is Ownable {
      * @notice Claim payouts
      */
     function claimPayouts() public {
-        // TODO: take care of depositEpochIDs
-
         claimVaultPayouts();
 
         UserInfo storage user = userInfos[msg.sender];
@@ -289,10 +280,7 @@ contract SelfInsuredVault is Ownable {
         IInsuranceProvider provider = providers[i];
         require(provider.isNextEpochPurchasable(), "SIV: not purchasable");
 
-        if (paymentToken.allowance(address(this), address(provider)) != 0) {
-            paymentToken.safeApprove(address(provider), 0);
-        }
-        paymentToken.safeApprove(address(provider), amount);
+        paymentToken.safeTransfer(address(provider), amount);
         provider.purchaseForNextEpoch(amount);
     }
 }
