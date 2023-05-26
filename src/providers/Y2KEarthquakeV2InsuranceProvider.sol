@@ -9,15 +9,26 @@ import { ERC1155Holder } from "openzeppelin/token/ERC1155/utils/ERC1155Holder.so
 import { VaultV2 } from "y2k-earthquake/src/v2/VaultV2.sol";
 
 import { IInsuranceProvider } from  "../interfaces/IInsuranceProvider.sol";
+import { IStakingRewards } from  "../interfaces/IStakingRewards.sol";
+import { IAddressUpdater } from "../interfaces/IAddressUpdater.sol";
 
 contract Y2KEarthquakeV2InsuranceProvider is IInsuranceProvider, Ownable, ERC1155Holder {
     using SafeERC20 for IERC20;
+
+    event Purchased(uint256 indexed epochId, uint256 amount);
+    event ClaimedPayout(uint256 indexed epochId, uint256 amount);
+    event ClaimedRewards(uint256 amount);
+    event SetStakingRewards(address stakingRewards);
+    event SetStakingRewardsUpdater(address stakingRewardsUpdater);
 
     VaultV2 public vault;
 
     IERC20 public override insuredToken;
     IERC20 public override paymentToken;
     IERC20 public override constant rewardToken = IERC20(0x65c936f008BC34fE819bce9Fa5afD9dc2d49977f);  // Y2K token
+
+    IStakingRewards public stakingRewards;
+    IAddressUpdater public stakingRewardsUpdater;
 
     address public immutable beneficiary;
 
@@ -120,7 +131,10 @@ contract Y2KEarthquakeV2InsuranceProvider is IInsuranceProvider, Ownable, ERC115
         require(isNextEpochPurchasable(), "YEIP: cannot purchase next epoch");
         paymentToken.safeTransferFrom(msg.sender, address(this), amountPremium);
         paymentToken.safeApprove(address(vault), amountPremium);
-        vault.deposit(nextEpoch(), amountPremium, address(this));
+        uint256 epochId = nextEpoch();
+        vault.deposit(epochId, amountPremium, address(this));
+
+        emit Purchased(epochId, amountPremium);
     }
 
     function _claimPayoutForEpoch(uint256 epochId) internal returns (uint256) {
@@ -130,6 +144,9 @@ contract Y2KEarthquakeV2InsuranceProvider is IInsuranceProvider, Ownable, ERC115
                                         vault.balanceOf(address(this), epochId),
                                         address(this),
                                         address(this));
+
+        emit ClaimedPayout(epochId, amount);
+
         return amount;
     }
 
@@ -141,7 +158,33 @@ contract Y2KEarthquakeV2InsuranceProvider is IInsuranceProvider, Ownable, ERC115
         return amount;
     }
 
+    function setStakingRewards(address stakingRewards_) external onlyOwner {
+        stakingRewards = IStakingRewards(stakingRewards_);
+
+        emit SetStakingRewards(stakingRewards_);
+    }
+
+    function setStakingRewardsUpdater(address stakingRewardsUpdater_) external onlyOwner {
+        stakingRewardsUpdater = IAddressUpdater(stakingRewardsUpdater_);
+
+        emit SetStakingRewardsUpdater(stakingRewardsUpdater_);
+    }
+
+    function updateStakingRewardsAddress() external {
+        require(address(stakingRewardsUpdater) != address(0), "YEIP: zero updater contract");
+        stakingRewards = IStakingRewards(stakingRewardsUpdater.getAddress());
+
+        emit SetStakingRewards(address(stakingRewards));
+    }
+
     function claimRewards() external override onlyOwner returns (uint256) {
-        return 0;
+        require (address(stakingRewards) != address(0), "YEIP: zero rewards contract");
+        stakingRewards.getReward();
+        uint256 amount = rewardToken.balanceOf(address(this));
+        rewardToken.safeTransfer(beneficiary, amount);
+
+        emit ClaimedRewards(amount);
+
+        return amount;
     }
 }
