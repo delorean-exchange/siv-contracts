@@ -202,9 +202,6 @@ contract SelfInsuredVault is ERC20 {
     function deposit(uint256 assets, address receiver) external returns (uint256) {
         require(assets <= this.maxDeposit(receiver), "SIV: max deposit");
 
-        // TODO: I don't think we actually need this min
-        require(assets >= PRECISION_FACTOR, "SIV: min deposit");
-
         for (uint8 i = 0; i < uint8(rewardTokens.length); i++) {
             address t = address(rewardTokens[i]);
             _updateYield(receiver, t);
@@ -371,7 +368,6 @@ contract SelfInsuredVault is ERC20 {
             require(currentEpochId != 0, "SIV: cannot compute with zero current epoch");
             EpochInfo[] storage infos = providerEpochs[address(provider)];
 
-            // TODO: GAS: Use nextId field + mapping instead of list
             for (uint256 j = 0; j < infos.length; j++) {
                 EpochInfo storage info = infos[j];
                 if (info.epochId < tracker.startEpochId) continue;
@@ -520,7 +516,6 @@ contract SelfInsuredVault is ERC20 {
 
             if (infos.length == 0) continue;
 
-            // TODO: GAS: Use nextId field + mapping instead of list
             // Loop skips the last (zero ID) EpochInfo
             for (uint256 j = 0; j < infos.length - 1; j++) {
                 EpochInfo storage info = infos[j];
