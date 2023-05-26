@@ -52,8 +52,6 @@ contract FakeYieldTrackerTest is BaseTest {
 
         address user0 = createTestUser(0);
 
-        return;
-
         assertEq(source.amountPending(user0), 0);
 
 

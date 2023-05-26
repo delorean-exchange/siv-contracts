@@ -143,11 +143,11 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
         return amount;
     }
 
-    function pendingRewards() external override view returns (uint256) {
+    function pendingRewards() external override pure returns (uint256) {
         return 0;
     }
 
-    function claimRewards() external override onlyOwner returns (uint256) {
+    function claimRewards() external override view onlyOwner returns (uint256) {
         return 0;
     }
 }

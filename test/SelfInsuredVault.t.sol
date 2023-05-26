@@ -366,7 +366,7 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         {
             (uint256 epochId0, uint256 totalShares0, , ) = vault.providerEpochs(address(provider), 0);
             assertEq(totalShares0, 0);
-            (uint256 epochId1, uint256 totalShares1, , ) = vault.providerEpochs(address(provider), 1);
+            ( , uint256 totalShares1, , ) = vault.providerEpochs(address(provider), 1);
             assertEq(totalShares1, 2e18);
 
             (uint256 startEpochId,
@@ -388,7 +388,7 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         {
             (uint256 epochId0, uint256 totalShares0, , ) = vault.providerEpochs(address(provider), 0);
             assertEq(totalShares0, 0);
-            (uint256 epochId1, uint256 totalShares1, , ) = vault.providerEpochs(address(provider), 1);
+            (, uint256 totalShares1, , ) = vault.providerEpochs(address(provider), 1);
             assertEq(totalShares1, 3e18);
 
             (uint256 startEpochId,
@@ -433,7 +433,7 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         vm.stopPrank();
 
         {
-            (uint256 epochId0, uint256 totalShares0, , ) = vault.providerEpochs(address(provider), 0);
+            ( , uint256 totalShares0, , ) = vault.providerEpochs(address(provider), 0);
             assertEq(totalShares0, 0);
             (uint256 epochId1, uint256 totalShares1, , ) = vault.providerEpochs(address(provider), 1);
             assertEq(totalShares1, 3e18);
@@ -618,7 +618,6 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
 
         // Alice claims rewards
         {
-            uint256[] memory previewRewards = vault.previewClaimRewards(ALICE);
             uint256 previewPayouts = vault.previewClaimPayouts(ALICE);
             assertEq(previewPayouts, 199000000000023768896);
             assertEq(previewPayouts, epochPayout(vault, address(provider), 1));

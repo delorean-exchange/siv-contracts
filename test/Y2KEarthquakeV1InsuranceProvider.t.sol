@@ -104,7 +104,9 @@ contract Y2KEarthquakeV1InsuranceProviderTest is BaseTest, ControllerHelper {
 
         uint256 delta = IERC20(weth).balanceOf(user0) - before;
 
+        assertEq(result0, 0);
         assertEq(result1, 19950000000000000000);
+        assertEq(result2, 0);
         assertEq(result1, pending, "result == pending");
         assertEq(delta, result1, "delta == result");
 
@@ -183,7 +185,6 @@ contract Y2KEarthquakeV1InsuranceProviderTest is BaseTest, ControllerHelper {
 
         vm.warp(beginEpoch + 1);
 
-        address user0 = createTestUser(0);
         vm.startPrank(user0);
 
         provider = new Y2KEarthquakeV1InsuranceProvider(address(vHedge), address(this));

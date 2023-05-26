@@ -8,13 +8,14 @@ import "../libraries/Math.sol";
 import { ERC20 } from  "openzeppelin/token/ERC20/ERC20.sol";
 import { IERC20 } from "openzeppelin/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "openzeppelin/token/ERC20/utils/SafeERC20.sol";
+import { ReentrancyGuard } from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 import { IYieldSource } from "dlx/src/interfaces/IYieldSource.sol";
 import { NPVSwap } from "dlx/src/core/NPVSwap.sol";
 
 import { IInsuranceProvider } from "../interfaces/IInsuranceProvider.sol";
 
-contract SelfInsuredVault is ERC20 {
+contract SelfInsuredVault is ERC20, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     event Deposit(address indexed sender,
@@ -182,24 +183,24 @@ contract SelfInsuredVault is ERC20 {
     }
 
     // -- ERC4642: Share conversion -- //
-    function convertToShares(uint256 assets) external view returns (uint256) {
+    function convertToShares(uint256 assets) external pure returns (uint256) {
         return assets;  // Non-rebasing vault, shares==assets
     }
 
-    function convertToAssets(uint256 shares) external view returns (uint256) {
+    function convertToAssets(uint256 shares) external pure returns (uint256) {
         return shares;  // Non-rebasing vault, shares==assets
     }
 
     // -- ERC4642: Deposit -- //
-    function maxDeposit(address receiver) external view returns (uint256) {
+    function maxDeposit(address) external pure returns (uint256) {
         return type(uint256).max;
     }
 
-    function previewDeposit(uint256 assets) external view returns (uint256) {
+    function previewDeposit(uint256 assets) external pure returns (uint256) {
         return assets;  // Non-rebasing vault, shares==assets
     }
 
-    function deposit(uint256 assets, address receiver) external returns (uint256) {
+    function deposit(uint256 assets, address receiver) external nonReentrant returns (uint256) {
         require(assets <= this.maxDeposit(receiver), "SIV: max deposit");
 
         for (uint8 i = 0; i < uint8(rewardTokens.length); i++) {
@@ -229,11 +230,11 @@ contract SelfInsuredVault is ERC20 {
         return _min(available, balanceOf(owner));
     }
 
-    function previewWithdraw(uint256 assets) external view returns (uint256) {
+    function previewWithdraw(uint256 assets) external pure returns (uint256) {
         return assets;
     }
 
-    function withdraw(uint256 assets, address receiver, address owner) external returns (uint256) {
+    function withdraw(uint256 assets, address receiver, address owner) external nonReentrant returns (uint256) {
         require(msg.sender == owner, "SIV: withdraw only owner");
         require(balanceOf(owner) >= assets, "SIV: withdraw insufficient balance");
 
@@ -249,29 +250,29 @@ contract SelfInsuredVault is ERC20 {
     }
 
     // -- ERC4642: Mint -- //
-    function maxMint(address receiver) external view returns (uint256) {
+    function maxMint(address) external pure returns (uint256) {
         return 0;  // deposit only vault
     }
 
-    function previewMint(uint256 shares) external view returns (uint256) {
+    function previewMint(uint256) external pure returns (uint256) {
         return 0;  // deposit only vault
     }
 
-    function mint(uint256 shares, address receiver) external returns (uint256) {
+    function mint(uint256, address) external pure returns (uint256) {
         assert(false);
         return 0;  // deposit only vault
     }
 
     // -- ERC4642: Redeem -- //
-    function maxRedeem(address owner) external view returns (uint256 maxShares) {
+    function maxRedeem(address) external pure returns (uint256) {
         return 0;  // deposit only vault
     }
 
-    function previewRedeem(uint256 shares) external view returns (uint256 assets) {
+    function previewRedeem(uint256) external pure returns (uint256) {
         return 0;  // deposit only vault
     }
 
-    function redeem(uint256 shares, address receiver, address owner) external returns (uint256 assets) {
+    function redeem(uint256, address, address) external pure returns (uint256) {
         assert(false);
         return 0;  // deposit only vault
     }
@@ -476,12 +477,10 @@ contract SelfInsuredVault is ERC20 {
         return _previewClaimRewards(who);
     }
 
-    function claimRewards() external returns (uint256[] memory) {
+    function claimRewards() external nonReentrant returns (uint256[] memory) {
         _harvest();
 
         uint256[] memory owed = _previewClaimRewards(msg.sender);
-
-        require(owed.length == rewardTokens.length, "SIV: claim length");
 
         for (uint8 i = 0; i < uint8(owed.length); i++) {
             address t = address(rewardTokens[i]);
@@ -510,7 +509,6 @@ contract SelfInsuredVault is ERC20 {
         UserEpochTracker storage tracker = userEpochTrackers[who];
         for (uint256 i = 0; i < providers.length; i++) {
             IInsuranceProvider provider = providers[i];
-            uint256 currentEpochId = provider.currentEpoch();
 
             EpochInfo[] storage infos = providerEpochs[address(provider)];
 
@@ -534,7 +532,7 @@ contract SelfInsuredVault is ERC20 {
         return _pendingPayouts(who);
     }
 
-    function claimPayouts() external returns (uint256) {
+    function claimPayouts() external nonReentrant returns (uint256) {
         uint256 amount = _pendingPayouts(msg.sender);
         paymentToken.safeTransfer(msg.sender, amount);
         userEpochTrackers[msg.sender].claimedPayouts += amount;
@@ -616,7 +614,7 @@ contract SelfInsuredVault is ERC20 {
         return sum;
     }
 
-    function claimVaultPayouts() external {
+    function claimVaultPayouts() external nonReentrant {
         if (providers.length == 0) return;
 
         uint256 j;
@@ -646,8 +644,6 @@ contract SelfInsuredVault is ERC20 {
         EpochInfo storage terminal = epochs[epochs.length - 1];
 
         require(terminal.premiumPaid == 0, "SIV: already purchased");
-
-        uint256 weight = weights[i];
 
         IERC20(provider.paymentToken()).approve(address(provider), amount);
         provider.purchaseForNextEpoch(amount);

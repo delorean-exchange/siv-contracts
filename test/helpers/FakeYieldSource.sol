@@ -69,7 +69,7 @@ contract FakeYieldSource is IYieldSource {
         _generatorToken = IFakeToken(generatorToken_);
     }
 
-    function callback(address who) public {
+    function callback(address) public {
         checkpointPending();
     }
 

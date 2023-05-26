@@ -124,7 +124,8 @@ contract Y2KEarthquakeV2InsuranceProvider is IInsuranceProvider, Ownable, ERC115
     }
 
     function pendingRewards() external override view returns (uint256) {
-        return 0;
+        if (address(stakingRewards) == address(0)) return 0;
+        return stakingRewards.earned(address(this));
     }
 
     function purchaseForNextEpoch(uint256 amountPremium) external onlyOwner override {

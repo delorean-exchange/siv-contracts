@@ -118,7 +118,9 @@ contract Y2KEarthquakeV2InsuranceProviderTest is BaseTest, Helper {
 
         uint256 delta = provider.paymentToken().balanceOf(alice) - before;
 
+        assertEq(result0, 0);
         assertEq(result1, 10 ether);
+        assertEq(result2, 0);
         assertEq(result1, pending, "result == pending");
         assertEq(delta, result1, "delta == result");
 
@@ -189,7 +191,9 @@ contract Y2KEarthquakeV2InsuranceProviderTest is BaseTest, Helper {
 
         uint256 delta = provider.paymentToken().balanceOf(alice) - before;
 
+        assertEq(result0, 0);
         assertEq(result1, 0);
+        assertEq(result2, 0);
         assertEq(result1, pending, "result == pending");
         assertEq(delta, result1, "delta == result");
 

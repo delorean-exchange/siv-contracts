@@ -35,13 +35,13 @@ contract DeployFakeSelfInsuredVaultScript is BaseScript {
     SelfInsuredVault public vault;
 
     function setUp() public {
-        /* init(); */
+        init();
     }
 
     function run() public {
         console.log("DeployGLPSelfInsuredVaultsScript");
 
-        /* vm.startBroadcast(pk); */
+        vm.startBroadcast(pk);
 
         /* string memory config; */
         /* if (eq(vm.envString("NETWORK"), "arbitrum")) { */
@@ -108,7 +108,7 @@ contract DeployFakeSelfInsuredVaultScript is BaseScript {
 
         /* vault.addRewardToken(y2kToken); */
 
-        /* vm.stopBroadcast(); */
+        vm.stopBroadcast();
 
         /* { */
         /*     string memory objName = "deploy"; */
