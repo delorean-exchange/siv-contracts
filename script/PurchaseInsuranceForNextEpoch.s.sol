@@ -35,9 +35,19 @@ contract PurchaseInsuranceForNextEpoch is BaseScript {
             config = vm.readFile("json/config.localhost.json");
         }
 
-        SelfInsuredVault vault = SelfInsuredVault(vm.parseJsonAddress(config, ".glpvault_siv.address"));
+        string memory historical = vm.readFile("json/historical.json");
+        uint256 daily = vm.parseJsonUint(historical, ".glpLimit1.avgDailyRewardPerToken");
 
-        vault.purchaseInsuranceForNextEpoch(50_00, 1000000);
+        console.log("Purchasing with daily yield:", daily);
+
+        SelfInsuredVault vault = SelfInsuredVault(vm.parseJsonAddress(config, ".glpvault_siv.address"));
+        uint256 assets = vault.totalAssets();
+
+        console.log("Assets in vault:", assets);
+        uint256 projected = (7 * daily * assets) / 1e18;
+
+        console.log("Using projected:", projected);
+        vault.purchaseInsuranceForNextEpoch(80_00, projected);
 
         vm.stopBroadcast();
     }

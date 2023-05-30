@@ -38,11 +38,12 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
 
         for (int256 i = len - 1; i >= 0; i--) {
             uint256 epochId = vault.epochs(uint256(i));
-            if (block.timestamp > epochId) {
-                break;
-            }
+
             if (block.timestamp > vault.idEpochBegin(epochId)) {
                 return epochId;
+            }
+            if (block.timestamp > epochId) {
+                break;
             }
         }
 

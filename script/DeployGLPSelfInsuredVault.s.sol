@@ -31,7 +31,6 @@ contract DeployFakeSelfInsuredVaultScript is BaseScript {
     Vault public vHedge;
     Vault public vRisk;
 
-    IInsuranceProvider public provider;
     SelfInsuredVault public vault;
 
     function setUp() public {
@@ -49,7 +48,8 @@ contract DeployFakeSelfInsuredVaultScript is BaseScript {
         } else {
             config = vm.readFile("json/dlx-config.localhost.json");
         }
-        npvSwap = NPVSwap(vm.parseJsonAddress(config, ".glp_npvSwap.address"));
+        /* npvSwap = NPVSwap(vm.parseJsonAddress(config, ".glp_npvSwap.address")); */
+        npvSwap = NPVSwap(0x96c58797653E633dc48F1D1c3E3a6501B3771Be2);
         console.log("npvSwap:", address(npvSwap));
 
         vaultFactory = VaultFactory(y2kVaultFactory);
@@ -86,8 +86,8 @@ contract DeployFakeSelfInsuredVaultScript is BaseScript {
                                                                arbitrumWeth,
                                                                address(glpTracker));
 
-        vault = new SelfInsuredVault("Self Insured GLP Vault",
-                                     "sivGLP",
+        vault = new SelfInsuredVault("Hedged GLP Vault",
+                                     "hGLP",
                                      address(source.yieldToken()),
                                      address(source),
                                      address(npvSwap));
@@ -96,10 +96,20 @@ contract DeployFakeSelfInsuredVaultScript is BaseScript {
 
         // GLP composition from https://app.gmx.io/#/dashboard
         // Sum of weights gives 10% of yield devoted to insurance
-        vault.addInsuranceProvider(providerForIndex(miUSDC, address(vault)), 7_90);  // 7.90%
-        vault.addInsuranceProvider(providerForIndex(miUSDT, address(vault)),   55);  // 0.55%
-        vault.addInsuranceProvider(providerForIndex(miDai,  address(vault)), 1_20);  // 1.20%
-        vault.addInsuranceProvider(providerForIndex(miFrax, address(vault)),   55);  // 0.55%
+        Y2KEarthquakeV1InsuranceProvider providerUSDC = providerForIndex(miUSDC, address(vault));
+        Y2KEarthquakeV1InsuranceProvider providerUSDT = providerForIndex(miUSDT, address(vault));
+        Y2KEarthquakeV1InsuranceProvider providerDai  = providerForIndex(miDai,  address(vault));
+        Y2KEarthquakeV1InsuranceProvider providerFrax = providerForIndex(miFrax, address(vault));
+
+        providerUSDC.transferOwnership(address(vault));
+        providerUSDT.transferOwnership(address(vault));
+        providerDai.transferOwnership(address(vault));
+        providerFrax.transferOwnership(address(vault));
+
+        vault.addInsuranceProvider(providerUSDC, 7_90);  // 7.90%
+        vault.addInsuranceProvider(providerUSDT,   55);  // 0.55%
+        vault.addInsuranceProvider(providerDai,  1_20);  // 1.20%
+        vault.addInsuranceProvider(providerFrax,   55);  // 0.55%
 
         vault.addRewardToken(y2kToken);
 
@@ -128,12 +138,13 @@ contract DeployFakeSelfInsuredVaultScript is BaseScript {
 
     }
 
-    function providerForIndex(uint256 marketIndex, address beneficiary) public returns (IInsuranceProvider) {
+    function providerForIndex(uint256 marketIndex, address beneficiary) public returns (Y2KEarthquakeV1InsuranceProvider) {
         console.log("Looking up vHedge for", marketIndex);
         vHedge = Vault(vaultFactory.getVaults(marketIndex)[0]);
         console.log("Got", address(vHedge));
 
-        provider = IInsuranceProvider(new Y2KEarthquakeV1InsuranceProvider(address(vHedge), beneficiary));
+        Y2KEarthquakeV1InsuranceProvider provider;
+        provider = new Y2KEarthquakeV1InsuranceProvider(address(vHedge), beneficiary);
 
         console.log("Next epoch", provider.nextEpoch());
         console.log("Next epoch purchasable?", provider.isNextEpochPurchasable());

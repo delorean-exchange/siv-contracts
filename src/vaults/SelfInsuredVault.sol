@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import "forge-std/console.sol";
-
 import "../libraries/Math.sol";
 
 import { ERC20 } from  "openzeppelin/token/ERC20/ERC20.sol";
@@ -118,6 +116,7 @@ contract SelfInsuredVault is ERC20, ReentrancyGuard {
     uint256 public constant WEIGHTS_PRECISION = 100_00;
     uint256 public constant MAX_COMBINED_WEIGHT = 20_00;
     uint256 public constant MAX_PROVIDERS = 10;
+    uint256 public constant MAX_PURCHSE_GROWTH = 20_00;  // 20% max growth in purchase each epoch
 
     address public admin;
     IInsuranceProvider[] public providers;
@@ -126,8 +125,8 @@ contract SelfInsuredVault is ERC20, ReentrancyGuard {
     IERC20 public immutable paymentToken;
 
     uint256 lastRecordedEpochId;
-
     uint256 dlxId;
+    uint256 lastPurchaseSize;
 
     IYieldSource public immutable yieldSource;
     NPVSwap public dlxSwap;
@@ -646,6 +645,7 @@ contract SelfInsuredVault is ERC20, ReentrancyGuard {
         require(terminal.premiumPaid == 0, "SIV: already purchased");
 
         IERC20(provider.paymentToken()).approve(address(provider), amount);
+
         provider.purchaseForNextEpoch(amount);
         terminal.premiumPaid = amount;
 
@@ -674,12 +674,19 @@ contract SelfInsuredVault is ERC20, ReentrancyGuard {
         }
         uint256 minOut = (sum * minBps) / 100_00;
 
+        require(lastPurchaseSize == 0 ||
+                (lastPurchaseSize * (100_00 + MAX_PURCHSE_GROWTH)) / 100_00 >= sum,
+                "SIV: max purchase growth");
+
         // Lock half generating tokens, leave other half for withdrawals until position
         // unlocks. If more than half those tokens are reqeusted to withdraw, they must
         // wait until the position repays itself, a function of the sum of weights,
         // yield rate, and epoch duration. If 10% of yield is devoted to insurance
         // purchase for 1 week epochs, it should take around 20% * 7 days = 1.4 days.
         uint256 amountLock = yieldSource.amountGenerator() / 2;
+
+        require(amountLock > 0, "SIV: vault empty");
+
         yieldSource.withdraw(amountLock, false, address(this));
         yieldSource.generatorToken().approve(address(dlxSwap), amountLock);
 
@@ -692,14 +699,18 @@ contract SelfInsuredVault is ERC20, ReentrancyGuard {
                                                    minOut,
                                                    0,
                                                    new bytes(0));
+
         dlxId = id;
 
         // Purchase insurance via Y2K
         for (uint256 i = 0; i < providers.length; i++) {
             uint256 amount = (actualOut * weights[i]) / WEIGHTS_PRECISION;
             if (amount == 0) continue;
+
             _purchaseForNextEpoch(i, amount);
         }
+
+        lastPurchaseSize = sum;
 
         emit PurchaseInsuranceForEpoch(minBps, epochProjectedYield);
     }
