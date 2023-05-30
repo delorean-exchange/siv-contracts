@@ -43,25 +43,25 @@ contract DeployFakeSelfInsuredVaultScript is BaseScript {
 
         vm.startBroadcast(pk);
 
-        /* string memory config; */
-        /* if (eq(vm.envString("NETWORK"), "arbitrum")) { */
-        /*     config = vm.readFile("json/dlx-config.arbitrum.json"); */
-        /* } else { */
-        /*     config = vm.readFile("json/dlx-config.localhost.json"); */
-        /* } */
-        /* npvSwap = NPVSwap(vm.parseJsonAddress(config, ".glp_npvSwap.address")); */
-        /* console.log("npvSwap:", address(npvSwap)); */
+        string memory config;
+        if (eq(vm.envString("NETWORK"), "arbitrum")) {
+            config = vm.readFile("json/dlx-config.arbitrum.json");
+        } else {
+            config = vm.readFile("json/dlx-config.localhost.json");
+        }
+        npvSwap = NPVSwap(vm.parseJsonAddress(config, ".glp_npvSwap.address"));
+        console.log("npvSwap:", address(npvSwap));
 
-        /* vaultFactory = VaultFactory(y2kVaultFactory); */
-        // Find market indexes in Y2K
-        /* uint256 miUSDC = 7; */
-        /* uint256 miUSDT = 8; */
-        /* uint256 miFrax = 13; */
-        /* uint256 miDai = 14; */
+        vaultFactory = VaultFactory(y2kVaultFactory);
+        uint256 miUSDC = 7;
+        uint256 miUSDT = 8;
+        uint256 miFrax = 13;
+        uint256 miDai =  14;
+
+        /* Find market indexes in Y2K */
         /* for (uint256 i = 1; i < vaultFactory.marketIndex(); i++) { */
         /*     hedge = vaultFactory.getVaults(i)[0]; */
         /*     risk = vaultFactory.getVaults(i)[1]; */
-
         /*     if (address(Vault(hedge).tokenInsured()) == arbitrumUSDC) { */
         /*         /\* console.log("USDC hedge", hedge, i); *\/ */
         /*         /\* miUSDC = i; *\/ */
@@ -77,72 +77,67 @@ contract DeployFakeSelfInsuredVaultScript is BaseScript {
         /*     } */
         /* } */
 
-        /* console.log("miUSDC", miUSDC); */
-        /* console.log("miUSDT", miUSDT); */
-        /* console.log("miFrax", miFrax); */
-        /* console.log("miDai ", miDai); */
+        console.log("miUSDC", miUSDC);
+        console.log("miUSDT", miUSDT);
+        console.log("miFrax", miFrax);
+        console.log("miDai ", miDai);
 
-        /* console.log("Deploying with npvSwap    ", address(npvSwap)); */
-        /* console.log("Deploying with slice      ", address(npvSwap.slice())); */
-        /* console.log("Deploying with source     ", address(YieldSlice(npvSwap.slice()).yieldSource())); */
-        /* console.log("Deploying with y2k factory", address(vaultFactory)); */
-        /* console.log("Deploying with stakedGLP  ", address(stakedGLP)); */
-        /* console.log("Deploying with glpTracker ", address(glpTracker)); */
+        StakedGLPYieldSource source = new StakedGLPYieldSource(address(stakedGLP),
+                                                               arbitrumWeth,
+                                                               address(glpTracker));
 
-        /* StakedGLPYieldSource source = new StakedGLPYieldSource(address(stakedGLP), */
-        /*                                                        arbitrumWeth, */
-        /*                                                        address(glpTracker)); */
+        vault = new SelfInsuredVault("Self Insured GLP Vault",
+                                     "sivGLP",
+                                     address(source.yieldToken()),
+                                     address(source),
+                                     address(npvSwap));
 
-        /* vault = new SelfInsuredVault("Self Insured GLP Vault", */
-        /*                              "sivGLP", */
-        /*                              address(source.yieldToken()), */
-        /*                              address(source), */
-        /*                              address(npvSwap)); */
+        source.setOwner(address(vault));
 
-        /* source.setOwner(address(vault)); */
+        // GLP composition from https://app.gmx.io/#/dashboard
+        // Sum of weights gives 10% of yield devoted to insurance
+        vault.addInsuranceProvider(providerForIndex(miUSDC, address(vault)), 7_90);  // 7.90%
+        vault.addInsuranceProvider(providerForIndex(miUSDT, address(vault)),   55);  // 0.55%
+        vault.addInsuranceProvider(providerForIndex(miDai,  address(vault)), 1_20);  // 1.20%
+        vault.addInsuranceProvider(providerForIndex(miFrax, address(vault)),   55);  // 0.55%
 
-        /* vault.addInsuranceProvider(providerForIndex(miUSDC, address(vault)), 8_00); */
-        /* vault.addInsuranceProvider(providerForIndex(miUSDT, address(vault)),   50); */
-        /* vault.addInsuranceProvider(providerForIndex(miDai,  address(vault)), 1_00); */
-        /* vault.addInsuranceProvider(providerForIndex(miFrax, address(vault)),   50); */
-
-        /* vault.addRewardToken(y2kToken); */
+        vault.addRewardToken(y2kToken);
 
         vm.stopBroadcast();
 
-        /* { */
-        /*     string memory objName = "deploy"; */
-        /*     string memory json; */
-        /*     json = vm.serializeAddress(objName, "address_vaultFactory", address(vaultFactory)); */
-        /*     json = vm.serializeAddress(objName, "address_controller", address(controller)); */
-        /*     json = vm.serializeAddress(objName, "address_siv", address(vault)); */
+        {
+            string memory objName = "deploy";
+            string memory json;
+            json = vm.serializeAddress(objName, "address_vaultFactory", address(vaultFactory));
+            json = vm.serializeAddress(objName, "address_controller", address(controller));
+            json = vm.serializeAddress(objName, "address_siv", address(vault));
 
-        /*     json = vm.serializeString(objName, "contractName_vaultFactory", "VaultFactory"); */
-        /*     json = vm.serializeString(objName, "contractName_controller", "Controller"); */
-        /*     json = vm.serializeString(objName, "contractName_siv", "SelfInsuredVault"); */
+            json = vm.serializeString(objName, "contractName_vaultFactory", "VaultFactory");
+            json = vm.serializeString(objName, "contractName_controller", "Controller");
+            json = vm.serializeString(objName, "contractName_siv", "SelfInsuredVault");
 
-        /*     string memory filename = "./json/deploy_glpvault"; */
-        /*     if (eq(vm.envString("NETWORK"), "arbitrum")) { */
-        /*         filename = string.concat(filename, ".arbitrum.json"); */
-        /*     } else { */
-        /*         filename = string.concat(filename, ".localhost.json"); */
-        /*     } */
+            string memory filename = "./json/deploy_glpvault";
+            if (eq(vm.envString("NETWORK"), "arbitrum")) {
+                filename = string.concat(filename, ".arbitrum.json");
+            } else {
+                filename = string.concat(filename, ".localhost.json");
+            }
 
-        /*     vm.writeJson(json, filename); */
-        /* } */
+            vm.writeJson(json, filename);
+        }
 
     }
 
-    /* function providerForIndex(uint256 marketIndex, address beneficiary) public returns (IInsuranceProvider) { */
-    /*     console.log("Looking up vHedge for", marketIndex); */
-    /*     vHedge = Vault(vaultFactory.getVaults(marketIndex)[0]); */
-    /*     console.log("Got", address(vHedge)); */
+    function providerForIndex(uint256 marketIndex, address beneficiary) public returns (IInsuranceProvider) {
+        console.log("Looking up vHedge for", marketIndex);
+        vHedge = Vault(vaultFactory.getVaults(marketIndex)[0]);
+        console.log("Got", address(vHedge));
 
-    /*     provider = IInsuranceProvider(new Y2KEarthquakeV1InsuranceProvider(address(vHedge), beneficiary)); */
+        provider = IInsuranceProvider(new Y2KEarthquakeV1InsuranceProvider(address(vHedge), beneficiary));
 
-    /*     console.log("Next epoch", provider.nextEpoch()); */
-    /*     console.log("Next epoch purch", provider.isNextEpochPurchasable()); */
+        console.log("Next epoch", provider.nextEpoch());
+        console.log("Next epoch purchasable?", provider.isNextEpochPurchasable());
 
-    /*     return provider; */
-    /* } */
+        return provider;
+    }
 }

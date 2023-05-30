@@ -387,7 +387,7 @@ contract SelfInsuredVault is ERC20, ReentrancyGuard {
         // EpochInfo's:
         //
         // - List size is N
-        // - Elements at 0..N-1 are past or current epochs
+        // - Element at 1..N-1 are past or current epochs
         // - Element at N has epochId 0
         // - Upcoming epochs are *not* present
         //

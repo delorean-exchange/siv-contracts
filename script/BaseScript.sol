@@ -7,6 +7,7 @@ import "forge-std/Script.sol";
 contract BaseScript is Script {
     uint256 pk;
     address deployerAddress;
+    address devAddress;
 
     address public glpTracker = 0x4e971a87900b931fF39d1Aad67697F49835400b6;
     address public stakedGLP = 0x5402B5F40310bDED796c7D0F3FF6683f5C0cFfdf;
@@ -35,6 +36,12 @@ contract BaseScript is Script {
             console.log("Using localhost private key");
             pk = vm.envUint("LOCALHOST_PRIVATE_KEY");
             deployerAddress = vm.envAddress("LOCALHOST_DEPLOYER_ADDRESS");
+            devAddress = vm.envAddress("LOCALHOST_DEV_ADDRESS");
+
+            console.log("VM deal", devAddress);
+            vm.deal(devAddress, 50 ether);
+            console.log("devAddress.balance", devAddress.balance);
+            vm.deal(deployerAddress, 50 ether);
         }
     }
 }
