@@ -589,38 +589,6 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
 
         assertEq(afterVal - before, 498263888888799600);
         assertEq(val, 498263888888799600);
-
-        return;
-
-        // Alice deposits more shares
-        vm.startPrank(ALICE);
-        gt.approve(address(vault), 3e18);
-        vault.deposit(3e18, ALICE);
-        vm.stopPrank();
-
-        {
-            ( , uint256 totalShares0, , ) = vault.providerEpochs(address(provider), 0);
-            assertEq(totalShares0, 0);
-            (uint256 epochId1, uint256 totalShares1, , ) = vault.providerEpochs(address(provider), 1);
-            assertEq(totalShares1, 3e18);
-            (uint256 epochId2, uint256 totalShares2, , ) = vault.providerEpochs(address(provider), 2);
-            assertEq(epochId2, 0);
-            assertEq(totalShares2, 6e18);
-
-            (uint256 startEpochId,
-             uint256 shares,
-             uint256 endEpochId,
-             uint256 nextShares,
-             uint256 accumulatedPayouts,
-             uint256 claimedPayouts) = vault.userEpochTrackers(ALICE);
-
-            assertEq(startEpochId, epochId1);
-            assertEq(endEpochId, epochId1);
-            assertEq(shares, 3e18);
-            assertEq(nextShares, 6e18);
-            assertEq(accumulatedPayouts, 0);
-            assertEq(claimedPayouts, 0);
-        }
     }
 
     function testPurchaseWithDLXFutureYield() public {

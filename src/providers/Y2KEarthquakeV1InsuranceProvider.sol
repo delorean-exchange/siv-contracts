@@ -142,38 +142,15 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
         uint256 epochId = _nextEpoch();
         vault.deposit(epochId, amountPremium, address(this));
 
+        // Stake the rewards
         uint256 end = epochId;
         uint256 begin = vault.idEpochBegin(epochId);
         address[2] memory addrs = rewardsFactory.getFarmAddresses(marketIndex, begin, end);
-
-        /* // Stake everything */
-        /* for (uint256 i = 0; i < 2; i++) { */
-        /*     uint256 balance = StakingRewards(addrs[i]).balanceOf(address(this), sr0.id()); */
-        /* } */
-
-        console.log("");
-        console.log("");
-        console.log("");
-        console.log("===");
-        console.log("PURCHASE GOT ADDRS");
-        console.log("addrs 0", addrs[0]);
-        console.log("addrs 1", addrs[1]);
-
-        StakingRewards sr0 = StakingRewards(addrs[0]);
-        StakingRewards sr1 = StakingRewards(addrs[1]);
-        console.log("sr0 stakingtoken", address(sr0.stakingToken()));
-        console.log("sr0 id", sr0.id());
-        console.log("sr0 bal", sr0.stakingToken().balanceOf(address(this), sr0.id()));
-        console.log("sr1 stakingtoken", address(sr1.stakingToken()));
-        console.log("sr1 id", sr1.id());
-        console.log("sr1 bal", sr1.stakingToken().balanceOf(address(this), sr1.id()));
-        console.log("amountPremium", amountPremium);
-
-        console.log("-->call stake!");
-
-        // Stake the rewards
-        sr0.stakingToken().setApprovalForAll(address(sr0), true);
-        sr0.stake(amountPremium);
+        if (addrs[0] != address(0)) {
+            StakingRewards sr0 = StakingRewards(addrs[0]);
+            sr0.stakingToken().setApprovalForAll(address(sr0), true);
+            sr0.stake(amountPremium);
+        }
 
         emit Purchased(epochId, amountPremium);
     }
