@@ -60,7 +60,9 @@ contract Y2KEarthquakeV1InsuranceProviderTest is BaseTest, ControllerHelper {
 
         vm.startPrank(user0);
 
-        provider = new Y2KEarthquakeV1InsuranceProvider(address(vHedge), user0);
+        provider = new Y2KEarthquakeV1InsuranceProvider(address(vHedge),
+                                                        user0,
+                                                        SINGLE_MARKET_INDEX);
 
         IERC20(weth).approve(address(provider), 10 ether);
         assertEq(provider.nextEpochPurchased(), 0);
@@ -187,7 +189,10 @@ contract Y2KEarthquakeV1InsuranceProviderTest is BaseTest, ControllerHelper {
 
         vm.startPrank(user0);
 
-        provider = new Y2KEarthquakeV1InsuranceProvider(address(vHedge), address(this));
+        provider = new Y2KEarthquakeV1InsuranceProvider(address(vHedge),
+                                                        address(this),
+                                                        SINGLE_MARKET_INDEX);
+
         IERC20(weth).approve(address(provider), 10 ether);
         provider.purchaseForNextEpoch(10 ether);
 

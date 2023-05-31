@@ -19,9 +19,12 @@ import { Y2KEarthquakeV1InsuranceProvider } from "../src/providers/Y2KEarthquake
 // Y2K imports
 import { Vault } from "y2k-earthquake/src/legacy_v1/Vault.sol";
 import { VaultFactory, TimeLock} from "y2k-earthquake/src/legacy_v1/VaultFactory.sol";
-import { Controller } from "y2k-earthquake/src/legacy_v1/Controller.sol"; 
+import { Controller } from "y2k-earthquake/src/legacy_v1/Controller.sol";
 import { ControllerHelper } from "y2k-earthquake/test/legacy_v1/ControllerHelper.sol";
 import { FakeOracle } from "y2k-earthquake/test/oracles/FakeOracle.sol";
+import { RewardsFactory } from "y2k-earthquake/src/legacy_v1/rewards/RewardsFactory.sol";
+import { GovToken } from "y2k-earthquake/test/legacy_v1/GovToken.sol";
+import { StakingRewards } from "y2k-earthquake/src/legacy_v1/rewards/StakingRewards.sol";
 
 // Delorean imports
 import { UniswapV3LiquidityPool } from "dlx/src/liquidity/UniswapV3LiquidityPool.sol";
@@ -100,7 +103,9 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         vm.stopPrank();
 
         // Set up the insurance provider
-        provider = new Y2KEarthquakeV1InsuranceProvider(address(vHedge), address(vault));
+        provider = new Y2KEarthquakeV1InsuranceProvider(address(vHedge),
+                                                        address(vault),
+                                                        SINGLE_MARKET_INDEX);
 
         // Set the insurance provider at 10% of expected yield
         vault.addInsuranceProvider(IInsuranceProvider(provider), 10_00);
@@ -457,6 +462,167 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         }
     }
 
+    function testRewardsPayments() public {
+        depositDepeg();
+        setUpVault();
+        setUpY2K();
+
+        // Move into the first epoch
+        vm.warp(beginEpoch + 10 days);
+
+        vault.setAdmin(ADMIN);
+
+        // Alice deposits into self insured vault
+        source.mintGenerator(ALICE, 10e18);
+
+        vm.startPrank(ALICE);
+        gt.approve(address(vault), 2e18);
+        assertEq(vault.previewDeposit(2e18), 2e18);
+        vault.deposit(2e18, ALICE);
+        gt.approve(address(vault), 1e18);
+        vault.deposit(1e18, ALICE);
+
+        {
+            (uint256 epochId0, uint256 totalShares0, , ) = vault.providerEpochs(address(provider), 0);
+            assertEq(totalShares0, 0);
+            (, uint256 totalShares1, , ) = vault.providerEpochs(address(provider), 1);
+            assertEq(totalShares1, 3e18);
+
+            (uint256 startEpochId,
+             uint256 shares,
+             uint256 endEpochId,
+             uint256 nextShares,
+             uint256 accumulatedPayouts,
+             uint256 claimedPayouts) = vault.userEpochTrackers(ALICE);
+            assertEq(startEpochId, 0);
+            assertEq(shares, 0);
+            assertEq(endEpochId, epochId0);
+            assertEq(nextShares, 3e18);
+            assertEq(accumulatedPayouts, 0);
+            assertEq(claimedPayouts, 0);
+        }
+
+        vm.stopPrank();
+
+
+        vm.startPrank(ADMIN);
+        GovToken govToken = new GovToken();
+        RewardsFactory rewardsFactory;
+        rewardsFactory = new RewardsFactory(address(govToken), address(vaultFactory));
+        vm.stopPrank();
+
+        provider.setRewardsFactory(address(rewardsFactory));
+
+        console.log("provider", address(provider));
+        uint256 pr = provider.pendingRewards();
+        console.log("PR:", pr);
+
+        // End the next epoch
+        vm.startPrank(vHedge.controller());
+        vHedge.endEpoch(provider.currentEpoch());
+        vm.stopPrank();
+
+        // Create three more epochs
+        vm.startPrank(vHedge.factory());
+        vHedge.createAssets(endEpoch, endEpoch + 1 days, 5);
+        vRisk.createAssets(endEpoch, endEpoch + 1 days, 5);
+
+        vHedge.createAssets(endEpoch + 1 days, endEpoch + 2 days, 5);
+        vRisk.createAssets(endEpoch + 1 days, endEpoch + 2 days, 5);
+
+        vHedge.createAssets(endEpoch + 2 days, endEpoch + 3 days, 5);
+        vRisk.createAssets(endEpoch + 2 days, endEpoch + 3 days, 5);
+        vm.stopPrank();
+
+        vm.startPrank(ADMIN);
+        rewardsFactory.createStakingRewards(SINGLE_MARKET_INDEX, endEpoch);
+        rewardsFactory.createStakingRewards(SINGLE_MARKET_INDEX, endEpoch + 1 days);
+
+        (address hedgeRewards, address riskRewards) =
+            rewardsFactory.createStakingRewards(SINGLE_MARKET_INDEX, endEpoch + 2 days);
+        govToken.mint(address(hedgeRewards), 5);
+        govToken.mint(address(riskRewards), 5);
+        StakingRewards(hedgeRewards).notifyRewardAmount(5 ether);
+        StakingRewards(riskRewards).notifyRewardAmount(5 ether);
+
+        vm.stopPrank();
+
+        provider.setRewardToken(address(StakingRewards(hedgeRewards).rewardsToken()));
+
+        // Move into the first epoch, with one more created epoch available after it
+        vm.warp(endEpoch + 10 minutes);
+        vm.startPrank(vHedge.controller());
+        vm.stopPrank();
+
+        console.log("");
+        console.log("");
+        console.log("");
+        console.log("===");
+        console.log("provider", address(provider));
+        pr = provider.pendingRewards();
+        console.log("PR:", pr);
+
+        source.mintBoth(address(this), 10e18);
+        provider.paymentToken().approve(address(provider), 1e18);
+        provider.purchaseForNextEpoch(1e18);
+
+        // Move into next epoch
+        vm.warp(endEpoch + 2 days + 10 minutes);
+
+        console.log("");
+        console.log("");
+        console.log("");
+        console.log("===");
+        pr = provider.pendingRewards();
+        console.log("PR2:", pr);
+
+        console.log("");
+        console.log("");
+        console.log("");
+        console.log("===");
+        uint256 before = provider.rewardToken().balanceOf(provider.beneficiary());
+        uint256 val = provider.claimRewards();
+        uint256 afterVal = provider.rewardToken().balanceOf(provider.beneficiary());
+        console.log("before", before);
+        console.log("afterVal", afterVal);
+        console.log("val", val);
+
+        assertEq(afterVal - before, 498263888888799600);
+        assertEq(val, 498263888888799600);
+
+        return;
+
+        // Alice deposits more shares
+        vm.startPrank(ALICE);
+        gt.approve(address(vault), 3e18);
+        vault.deposit(3e18, ALICE);
+        vm.stopPrank();
+
+        {
+            ( , uint256 totalShares0, , ) = vault.providerEpochs(address(provider), 0);
+            assertEq(totalShares0, 0);
+            (uint256 epochId1, uint256 totalShares1, , ) = vault.providerEpochs(address(provider), 1);
+            assertEq(totalShares1, 3e18);
+            (uint256 epochId2, uint256 totalShares2, , ) = vault.providerEpochs(address(provider), 2);
+            assertEq(epochId2, 0);
+            assertEq(totalShares2, 6e18);
+
+            (uint256 startEpochId,
+             uint256 shares,
+             uint256 endEpochId,
+             uint256 nextShares,
+             uint256 accumulatedPayouts,
+             uint256 claimedPayouts) = vault.userEpochTrackers(ALICE);
+
+            assertEq(startEpochId, epochId1);
+            assertEq(endEpochId, epochId1);
+            assertEq(shares, 3e18);
+            assertEq(nextShares, 6e18);
+            assertEq(accumulatedPayouts, 0);
+            assertEq(claimedPayouts, 0);
+        }
+    }
+
     function testPurchaseWithDLXFutureYield() public {
         // Send lots of WETH to vault source
         uint256 wethAmount = 1000000e18;
@@ -562,7 +728,9 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
 
 
         // Set up the insurance provider
-        provider = new Y2KEarthquakeV1InsuranceProvider(address(vHedge), address(vault));
+        provider = new Y2KEarthquakeV1InsuranceProvider(address(vHedge),
+                                                        address(vault),
+                                                        SINGLE_MARKET_INDEX);
         provider.transferOwnership(address(vault));
 
         vm.warp(beginEpoch + 1);

@@ -107,9 +107,9 @@ contract DeployFakeSelfInsuredVaultScript is BaseScript {
         providerFrax.transferOwnership(address(vault));
 
         vault.addInsuranceProvider(providerUSDC, 7_90);  // 7.90%
-        vault.addInsuranceProvider(providerUSDT,   55);  // 0.55%
-        vault.addInsuranceProvider(providerDai,  1_20);  // 1.20%
-        vault.addInsuranceProvider(providerFrax,   55);  // 0.55%
+        /* vault.addInsuranceProvider(providerUSDT,   55);  // 0.55% */
+        /* vault.addInsuranceProvider(providerDai,  1_20);  // 1.20% */
+        /* vault.addInsuranceProvider(providerFrax,   55);  // 0.55% */
 
         vault.addRewardToken(y2kToken);
 
@@ -139,15 +139,38 @@ contract DeployFakeSelfInsuredVaultScript is BaseScript {
     }
 
     function providerForIndex(uint256 marketIndex, address beneficiary) public returns (Y2KEarthquakeV1InsuranceProvider) {
+
+        console.log("");
+        console.log("");
+        console.log("===");
         console.log("Looking up vHedge for", marketIndex);
         vHedge = Vault(vaultFactory.getVaults(marketIndex)[0]);
         console.log("Got", address(vHedge));
 
         Y2KEarthquakeV1InsuranceProvider provider;
-        provider = new Y2KEarthquakeV1InsuranceProvider(address(vHedge), beneficiary);
+        provider = new Y2KEarthquakeV1InsuranceProvider(address(vHedge), beneficiary, marketIndex);
 
-        console.log("Next epoch", provider.nextEpoch());
-        console.log("Next epoch purchasable?", provider.isNextEpochPurchasable());
+        uint256 len = vHedge.epochsLength();
+        console.log("LEN", len);
+
+        for (uint256 i = len - 1; i > len - 4; i--) {
+            uint256 epochId = vHedge.epochs(i);
+            uint256 end = epochId;
+            uint256 begin = vHedge.idEpochBegin(epochId);
+            address addr = provider.rewardsFactory().getFarmAddresses(marketIndex, begin, end)[0];
+
+            console.log("addr:", i, addr);
+        }
+
+        /* console.log("Current epoch", epochId); */
+        /* console.log("Begin", vHedge.idEpochBegin(epochId)); */
+        /* console.log("Next epoch", provider.nextEpoch()); */
+        /* console.log("Next epoch purchasable?", provider.isNextEpochPurchasable()); */
+
+        /* console.log("provider.rewardsFactory()", address(provider.rewardsFactory())); */
+        /* console.log("addr", provider.rewardsFactory().getFarmAddresses(marketIndex, */
+        /*                                                                vHedge.idEpochBegin(epochId), */
+        /*                                                                epochId)[0]); */
 
         return provider;
     }

@@ -1,34 +1,71 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
+import "forge-std/console.sol";
+
 import { Ownable } from "openzeppelin/access/Ownable.sol";
 import { IERC20 } from "openzeppelin/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "openzeppelin/token/ERC20/utils/SafeERC20.sol";
 import { ERC1155Holder } from "openzeppelin/token/ERC1155/utils/ERC1155Holder.sol";
 import { Vault } from  "y2k-earthquake/src/legacy_v1/Vault.sol";
+import { RewardsFactory } from  "y2k-earthquake/src/legacy_v1/rewards/RewardsFactory.sol";
+import { StakingRewards } from "y2k-earthquake/src/legacy_v1/rewards/StakingRewards.sol";
 
 import { IInsuranceProvider } from  "../interfaces/IInsuranceProvider.sol";
+import { IStakingRewards } from  "../interfaces/IStakingRewards.sol";
 
 contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC1155Holder {
     using SafeERC20 for IERC20;
 
+    event ClaimedPayout(uint256 indexed epochId, uint256 amount);
+    event ClaimedRewards(address indexed stakingRewards, uint256 amount);
+    event Purchased(uint256 indexed epochId, uint256 amount);
+    event SetRewardsFactory(address indexed rewardsFactory);
+    event SetRewardToken(address indexed rewardToken);
+    event SetStakingRewards(address indexed stakingRewards);
+
     Vault public vault;
+    uint256 public marketIndex;
 
     IERC20 public override insuredToken;
     IERC20 public override paymentToken;
-    IERC20 public override constant rewardToken = IERC20(0x65c936f008BC34fE819bce9Fa5afD9dc2d49977f);  // Y2K token
+    IERC20 public override rewardToken = IERC20(0x65c936f008BC34fE819bce9Fa5afD9dc2d49977f);  // Y2K token
 
+    RewardsFactory public rewardsFactory = RewardsFactory(0xa86Fb27D996E6BDf2383E8dEe998065f60F30e88);
+
+    address public admin;
     address public immutable beneficiary;
 
     uint256 public claimedEpochIndex;
+    uint256 public rewardsEpochIndex;
 
-    constructor(address vault_, address beneficiary_) {
+    modifier onlyAdmin {
+        require(msg.sender == admin, "YEIP: only admin");
+        _;
+    }
+
+    constructor(address vault_, address beneficiary_, uint256 marketIndex_) {
         vault = Vault(vault_);
         insuredToken = IERC20(address(vault.tokenInsured()));
         paymentToken = IERC20(address(vault.asset()));
+        admin = msg.sender;
         beneficiary = beneficiary_;
+        marketIndex = marketIndex_;
 
         claimedEpochIndex = 0;
+        rewardsEpochIndex = 0;
+    }
+
+    function setRewardsFactory(address rewardsFactory_) external onlyAdmin {
+        rewardsFactory = RewardsFactory(rewardsFactory_);
+
+        emit SetStakingRewards(address(rewardsFactory));
+    }
+
+    function setRewardToken(address rewardToken_) external onlyAdmin {
+        rewardToken = IERC20(rewardToken_);
+
+        emit SetRewardToken(address(rewardToken));
     }
 
     function _currentEpoch() internal view returns (uint256) {
@@ -102,7 +139,43 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
         require(isNextEpochPurchasable(), "YEIP: cannot purchase next epoch");
         paymentToken.safeTransferFrom(msg.sender, address(this), amountPremium);
         paymentToken.safeApprove(address(vault), amountPremium);
-        vault.deposit(_nextEpoch(), amountPremium, address(this));
+        uint256 epochId = _nextEpoch();
+        vault.deposit(epochId, amountPremium, address(this));
+
+        uint256 end = epochId;
+        uint256 begin = vault.idEpochBegin(epochId);
+        address[2] memory addrs = rewardsFactory.getFarmAddresses(marketIndex, begin, end);
+
+        /* // Stake everything */
+        /* for (uint256 i = 0; i < 2; i++) { */
+        /*     uint256 balance = StakingRewards(addrs[i]).balanceOf(address(this), sr0.id()); */
+        /* } */
+
+        console.log("");
+        console.log("");
+        console.log("");
+        console.log("===");
+        console.log("PURCHASE GOT ADDRS");
+        console.log("addrs 0", addrs[0]);
+        console.log("addrs 1", addrs[1]);
+
+        StakingRewards sr0 = StakingRewards(addrs[0]);
+        StakingRewards sr1 = StakingRewards(addrs[1]);
+        console.log("sr0 stakingtoken", address(sr0.stakingToken()));
+        console.log("sr0 id", sr0.id());
+        console.log("sr0 bal", sr0.stakingToken().balanceOf(address(this), sr0.id()));
+        console.log("sr1 stakingtoken", address(sr1.stakingToken()));
+        console.log("sr1 id", sr1.id());
+        console.log("sr1 bal", sr1.stakingToken().balanceOf(address(this), sr1.id()));
+        console.log("amountPremium", amountPremium);
+
+        console.log("-->call stake!");
+
+        // Stake the rewards
+        sr0.stakingToken().setApprovalForAll(address(sr0), true);
+        sr0.stake(amountPremium);
+
+        emit Purchased(epochId, amountPremium);
     }
 
     function _pendingPayoutForEpoch(uint256 epochId) internal view returns (uint256) {
@@ -133,6 +206,9 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
                                         vault.balanceOf(address(this), epochId),
                                         address(this),
                                         address(this));
+
+        emit ClaimedPayout(epochId, amount);
+
         return amount;
     }
 
@@ -144,11 +220,85 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
         return amount;
     }
 
-    function pendingRewards() external override pure returns (uint256) {
-        return 0;
+    function claimRewardsForAddress(address stakingRewards) public returns (uint256) {
+        uint256 earned = IStakingRewards(stakingRewards).earned(address(this));
+        IStakingRewards(stakingRewards).getReward();
+        uint256 amount = rewardToken.balanceOf(address(this));
+        console.log("");
+        console.log("->Earned is ", earned);
+        console.log("->Claim gave", amount);
+        console.log("");
+        rewardToken.safeTransfer(beneficiary, amount);
+
+        emit ClaimedRewards(stakingRewards, amount);
+
+        return amount;
     }
 
-    function claimRewards() external override view onlyOwner returns (uint256) {
-        return 0;
+    function pendingRewardsForAddress(address stakingRewards) public view returns (uint256) {
+        if (stakingRewards == address(0)) return 0;
+        return IStakingRewards(stakingRewards).earned(address(this));
+    }
+
+
+    function pendingRewards() external override view returns (uint256) {
+        uint256 pending = 0;
+        uint256 len = vault.epochsLength();
+
+        console.log("get PR with len:", len);
+
+        for (uint256 i = rewardsEpochIndex; i < len; i++) {
+            uint256 epochId = vault.epochs(i);
+
+            console.log("- epochId", epochId);
+
+            // Do not harvest rewards for active/future epochs
+            if (epochId >= _currentEpoch()) {
+                console.log("> Break");
+                break;
+            }
+
+            uint256 end = epochId;
+            uint256 begin = vault.idEpochBegin(epochId);
+
+            console.log("GET farm rewards with:");
+            console.log("marketIndex", marketIndex);
+            console.log("begin      ", begin);
+            console.log("end        ", end);
+
+            address[2] memory addrs = rewardsFactory.getFarmAddresses(marketIndex, begin, end);
+
+            console.log("addrs 0", addrs[0]);
+            console.log("addrs 1", addrs[1]);
+
+            pending += pendingRewardsForAddress(addrs[0]);
+            pending += pendingRewardsForAddress(addrs[1]);
+        }
+
+        return pending;
+    }
+
+    function claimRewards() external override onlyOwner returns (uint256) {
+        uint256 amount = 0;
+        uint256 len = vault.epochsLength();
+
+        for (uint256 i = rewardsEpochIndex; i < len; i++) {
+            uint256 epochId = vault.epochs(i);
+
+            // Do not harvest rewards for active/future epochs
+            if (epochId >= _currentEpoch()) {
+                break;
+            }
+
+            uint256 end = epochId;
+            uint256 begin = vault.idEpochBegin(epochId);
+            address[2] memory addrs = rewardsFactory.getFarmAddresses(marketIndex, begin, end);
+            amount += claimRewardsForAddress(addrs[0]);
+            amount += claimRewardsForAddress(addrs[1]);
+
+            rewardsEpochIndex = i;
+        }
+
+        return amount;
     }
 }

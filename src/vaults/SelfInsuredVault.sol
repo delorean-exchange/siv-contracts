@@ -202,7 +202,7 @@ contract SelfInsuredVault is ERC20, ReentrancyGuard {
     function deposit(uint256 assets, address receiver) external nonReentrant returns (uint256) {
         require(assets <= this.maxDeposit(receiver), "SIV: max deposit");
 
-        for (uint8 i = 0; i < uint8(rewardTokens.length); i++) {
+        for (uint256 i = 0; i < rewardTokens.length; i++) {
             address t = address(rewardTokens[i]);
             _updateYield(receiver, t);
         }
@@ -284,9 +284,13 @@ contract SelfInsuredVault is ERC20, ReentrancyGuard {
 
         emit Harvest(address(yieldSource.yieldToken()), pending);
 
-        // Harvest reward tokens in slots 1+, which are simply transferred into
-        // the contract
-        for (uint8 i = 1; i < uint8(rewardTokens.length); i++) {
+        // Harvest rewards tokens from providers
+        for (uint256 i = 0; i < providers.length; i++) {
+            providers[i].claimRewards();
+        }
+
+        // Update account for reward tokens in slots 1+, based on token balances
+        for (uint256 i = 1; i < rewardTokens.length; i++) {
             address t = address(rewardTokens[i]);
             GlobalYieldInfo storage gyInfo = globalYieldInfos[t];
             uint256 harvestedYield = (IERC20(t).balanceOf(address(this)) +
@@ -481,7 +485,7 @@ contract SelfInsuredVault is ERC20, ReentrancyGuard {
 
         uint256[] memory owed = _previewClaimRewards(msg.sender);
 
-        for (uint8 i = 0; i < uint8(owed.length); i++) {
+        for (uint256 i = 0; i < owed.length; i++) {
             address t = address(rewardTokens[i]);
 
             _updateYield(msg.sender, t);
