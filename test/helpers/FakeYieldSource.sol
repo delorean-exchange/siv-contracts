@@ -122,10 +122,7 @@ contract FakeYieldSource is IYieldSource {
     }
 
     function amountPending() external override virtual view returns (uint256) {
-        console.log("??");
-        uint256 x = _pendingUnaccounted() + pending;
-        console.log("!!");
-        return x;
+        return _pendingUnaccounted() + pending;
     }
 
     function deposit(uint256 amount, bool claim) external override {

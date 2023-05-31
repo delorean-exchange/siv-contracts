@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import "forge-std/console.sol";
-
 import { IERC20 } from "openzeppelin/token/ERC20/IERC20.sol";
 
 import { BaseTest } from "./BaseTest.sol";
@@ -512,9 +510,7 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         vm.stopPrank();
         provider.setRewardsFactory(address(rewardsFactory));
 
-        console.log("provider", address(provider));
         uint256 pr = provider.pendingRewards();
-        console.log("PR:", pr);
 
         // End the next epoch
         vm.startPrank(vHedge.controller());
@@ -552,14 +548,6 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         vm.startPrank(vHedge.controller());
         vm.stopPrank();
 
-        console.log("");
-        console.log("");
-        console.log("");
-        console.log("===");
-        console.log("provider", address(provider));
-        pr = provider.pendingRewards();
-        console.log("PR:", pr);
-
         source.mintBoth(address(this), 10e18);
         provider.paymentToken().approve(address(provider), 1e18);
         provider.purchaseForNextEpoch(1e18);
@@ -567,23 +555,9 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         // Move into next epoch
         vm.warp(endEpoch + 2 days + 10 minutes);
 
-        console.log("");
-        console.log("");
-        console.log("");
-        console.log("===");
-        pr = provider.pendingRewards();
-        console.log("PR2:", pr);
-
-        console.log("");
-        console.log("");
-        console.log("");
-        console.log("===");
         uint256 before = provider.rewardToken().balanceOf(provider.beneficiary());
         uint256 val = provider.claimRewards();
         uint256 afterVal = provider.rewardToken().balanceOf(provider.beneficiary());
-        console.log("before", before);
-        console.log("afterVal", afterVal);
-        console.log("val", val);
 
         assertEq(afterVal - before, 498263888888799600);
         assertEq(val, 498263888888799600);

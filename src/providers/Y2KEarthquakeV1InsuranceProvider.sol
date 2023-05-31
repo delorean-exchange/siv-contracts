@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import "forge-std/console.sol";
-
 import { Ownable } from "openzeppelin/access/Ownable.sol";
 import { IERC20 } from "openzeppelin/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "openzeppelin/token/ERC20/utils/SafeERC20.sol";
@@ -40,8 +38,6 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
     uint256 public rewardsEpochIndex;
 
     modifier onlyAdmin {
-        console.log("onlyAdmin", msg.sender);
-        console.log("onlyAdmin", admin);
         require(msg.sender == admin, "YEIP: only admin");
         _;
     }
@@ -59,7 +55,6 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
     }
 
     function setRewardsFactory(address rewardsFactory_) external onlyAdmin {
-        console.log("setRewardsFactory", rewardsFactory_);
         rewardsFactory = RewardsFactory(rewardsFactory_);
 
         emit SetRewardsFactory(address(rewardsFactory));
@@ -214,10 +209,6 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
         uint256 earned = IStakingRewards(stakingRewards).earned(address(this));
         IStakingRewards(stakingRewards).getReward();
         uint256 amount = rewardToken.balanceOf(address(this));
-        console.log("");
-        console.log("->Earned is ", earned);
-        console.log("->Claim gave", address(rewardToken), amount);
-        console.log("");
         rewardToken.safeTransfer(beneficiary, amount);
 
         emit ClaimedRewards(stakingRewards, amount);
@@ -235,32 +226,17 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
         uint256 pending = rewardToken.balanceOf(address(this));
         uint256 len = vault.epochsLength();
 
-        console.log("get PR with len:", len);
-
         for (uint256 i = rewardsEpochIndex; i < len; i++) {
             uint256 epochId = vault.epochs(i);
 
-            console.log("- epochId", epochId);
-
             // Do not harvest rewards for active/future epochs
             if (epochId >= _currentEpoch()) {
-                console.log("> Break");
                 break;
             }
 
             uint256 end = epochId;
             uint256 begin = vault.idEpochBegin(epochId);
-
-            console.log("GET farm rewards with:");
-            console.log("marketIndex", marketIndex);
-            console.log("begin      ", begin);
-            console.log("end        ", end);
-
             address[2] memory addrs = rewardsFactory.getFarmAddresses(marketIndex, begin, end);
-
-            console.log("addrs 0", addrs[0]);
-            console.log("addrs 1", addrs[1]);
-
             pending += pendingRewardsForAddress(addrs[0]);
             pending += pendingRewardsForAddress(addrs[1]);
         }
