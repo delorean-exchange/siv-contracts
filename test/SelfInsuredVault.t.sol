@@ -510,7 +510,6 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         RewardsFactory rewardsFactory;
         rewardsFactory = new RewardsFactory(address(govToken), address(vaultFactory));
         vm.stopPrank();
-
         provider.setRewardsFactory(address(rewardsFactory));
 
         console.log("provider", address(provider));
@@ -544,7 +543,6 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         govToken.mint(address(riskRewards), 5);
         StakingRewards(hedgeRewards).notifyRewardAmount(5 ether);
         StakingRewards(riskRewards).notifyRewardAmount(5 ether);
-
         vm.stopPrank();
 
         provider.setRewardToken(address(StakingRewards(hedgeRewards).rewardsToken()));
@@ -675,15 +673,46 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
         vHedge = Vault(hedge);
         vRisk = Vault(risk);
 
-        // Create another 2 epochs
+        // Create another 3 epochs
         vm.startPrank(vHedge.factory());
         vHedge.createAssets(endEpoch,          endEpoch + 1 days, 5);
         vHedge.createAssets(endEpoch + 1 days, endEpoch + 2 days, 5);
-        vm.stopPrank();
+        vHedge.createAssets(endEpoch + 2 days, endEpoch + 3 days, 5);
 
-        vm.startPrank(vRisk.factory());
         vRisk.createAssets(endEpoch,          endEpoch + 1 days, 5);
         vRisk.createAssets(endEpoch + 1 days, endEpoch + 2 days, 5);
+        vRisk.createAssets(endEpoch + 2 days, endEpoch + 3 days, 5);
+        vm.stopPrank();
+
+        // Set up staking rewards
+        vm.startPrank(ADMIN);
+        GovToken govToken = new GovToken();
+        RewardsFactory rewardsFactory;
+        rewardsFactory = new RewardsFactory(address(govToken), address(vaultFactory));
+
+        address hedgeRewards;
+        address riskRewards;
+        (hedgeRewards, riskRewards) =
+            rewardsFactory.createStakingRewards(SINGLE_MARKET_INDEX, endEpoch);
+        govToken.mint(address(hedgeRewards), 5);
+        govToken.mint(address(riskRewards), 5);
+        StakingRewards(hedgeRewards).notifyRewardAmount(5 ether);
+        StakingRewards(riskRewards).notifyRewardAmount(5 ether);
+
+        (hedgeRewards, riskRewards) =
+            rewardsFactory.createStakingRewards(SINGLE_MARKET_INDEX, endEpoch + 1 days);
+        govToken.mint(address(hedgeRewards), 5);
+        govToken.mint(address(riskRewards), 5);
+        StakingRewards(hedgeRewards).notifyRewardAmount(5 ether);
+        StakingRewards(riskRewards).notifyRewardAmount(5 ether);
+
+        (hedgeRewards, riskRewards) =
+            rewardsFactory.createStakingRewards(SINGLE_MARKET_INDEX, endEpoch + 2 days);
+        govToken.mint(address(hedgeRewards), 5);
+        govToken.mint(address(riskRewards), 5);
+        StakingRewards(hedgeRewards).notifyRewardAmount(5 ether);
+        StakingRewards(riskRewards).notifyRewardAmount(5 ether);
+
         vm.stopPrank();
 
         vm.startPrank(ADMIN);
@@ -694,14 +723,22 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
                                      address(npvSwap));
         vm.stopPrank();
 
-
         // Set up the insurance provider
         provider = new Y2KEarthquakeV1InsuranceProvider(address(vHedge),
                                                         address(vault),
                                                         SINGLE_MARKET_INDEX);
         provider.transferOwnership(address(vault));
+        provider.setRewardsFactory(address(rewardsFactory));
+        provider.setRewardToken(address(StakingRewards(hedgeRewards).rewardsToken()));
+
+        vm.startPrank(ADMIN);
+        vault.addRewardToken(address(provider.rewardToken()));
+        vm.stopPrank();
+
+        /* return; */
 
         vm.warp(beginEpoch + 1);
+        /* vm.roll(block.number + 1); */
 
         // Bob buys the risk
         vm.startPrank(BOB);
@@ -729,6 +766,7 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
 
         // Trigger a depeg
         vm.warp(endEpoch + 1 minutes);
+        /* vm.roll(block.number + 1); */
         assertEq(epochPayout(vault, address(provider), 0), 0);
         controller.triggerDepeg(SINGLE_MARKET_INDEX, endEpoch + 1 days);
 
@@ -785,6 +823,12 @@ contract SelfInsuredVaultTest is BaseTest, ControllerHelper {
             assertEq(delta, 5e17);
             assertEq(vault.balanceOf(ALICE), 0);
         }
+
+        vm.startPrank(ALICE);
+        vault.claimRewards();
+        vm.stopPrank();
+        assertEq(StakingRewards(hedgeRewards).rewardsToken().balanceOf(address(vault)),
+                 4516239172638714560);
     }
 
     function testDoubleAddRewardToken() public {

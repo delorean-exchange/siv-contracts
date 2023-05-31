@@ -40,6 +40,8 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
     uint256 public rewardsEpochIndex;
 
     modifier onlyAdmin {
+        console.log("onlyAdmin", msg.sender);
+        console.log("onlyAdmin", admin);
         require(msg.sender == admin, "YEIP: only admin");
         _;
     }
@@ -57,9 +59,10 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
     }
 
     function setRewardsFactory(address rewardsFactory_) external onlyAdmin {
+        console.log("setRewardsFactory", rewardsFactory_);
         rewardsFactory = RewardsFactory(rewardsFactory_);
 
-        emit SetStakingRewards(address(rewardsFactory));
+        emit SetRewardsFactory(address(rewardsFactory));
     }
 
     function setRewardToken(address rewardToken_) external onlyAdmin {
@@ -178,6 +181,16 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
     }
 
     function _claimPayoutForEpoch(uint256 epochId) internal returns (uint256) {
+        uint256 end = epochId;
+        uint256 begin = vault.idEpochBegin(epochId);
+        address[2] memory addrs = rewardsFactory.getFarmAddresses(marketIndex, begin, end);
+        if (addrs[0] != address(0)) {
+            StakingRewards sr0 = StakingRewards(addrs[0]);
+            if (sr0.balanceOf(address(this)) > 0) {
+                sr0.exit();
+            }
+        }
+
         if (vault.balanceOf(address(this), epochId) == 0) return 0;
         uint256 amount = vault.withdraw(epochId,
                                         vault.balanceOf(address(this), epochId),
@@ -203,7 +216,7 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
         uint256 amount = rewardToken.balanceOf(address(this));
         console.log("");
         console.log("->Earned is ", earned);
-        console.log("->Claim gave", amount);
+        console.log("->Claim gave", address(rewardToken), amount);
         console.log("");
         rewardToken.safeTransfer(beneficiary, amount);
 
@@ -219,7 +232,7 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
 
 
     function pendingRewards() external override view returns (uint256) {
-        uint256 pending = 0;
+        uint256 pending = rewardToken.balanceOf(address(this));
         uint256 len = vault.epochsLength();
 
         console.log("get PR with len:", len);
