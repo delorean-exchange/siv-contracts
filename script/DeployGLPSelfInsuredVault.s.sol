@@ -48,7 +48,6 @@ contract DeployFakeSelfInsuredVaultScript is BaseScript {
         } else {
             config = vm.readFile("json/dlx-config.localhost.json");
         }
-        /* npvSwap = NPVSwap(vm.parseJsonAddress(config, ".glp_npvSwap.address")); */
         npvSwap = NPVSwap(0x96c58797653E633dc48F1D1c3E3a6501B3771Be2);
         console.log("npvSwap:", address(npvSwap));
 
@@ -57,30 +56,6 @@ contract DeployFakeSelfInsuredVaultScript is BaseScript {
         uint256 miUSDT = 8;
         uint256 miFrax = 13;
         uint256 miDai =  14;
-
-        /* Find market indexes in Y2K */
-        /* for (uint256 i = 1; i < vaultFactory.marketIndex(); i++) { */
-        /*     hedge = vaultFactory.getVaults(i)[0]; */
-        /*     risk = vaultFactory.getVaults(i)[1]; */
-        /*     if (address(Vault(hedge).tokenInsured()) == arbitrumUSDC) { */
-        /*         /\* console.log("USDC hedge", hedge, i); *\/ */
-        /*         /\* miUSDC = i; *\/ */
-        /*     } else if (address(Vault(hedge).tokenInsured()) == arbitrumUSDT) { */
-        /*         /\* console.log("USDT hedge", hedge, i); *\/ */
-        /*         /\* miUSDT = i; *\/ */
-        /*     } else if (address(Vault(hedge).tokenInsured()) == arbitrumFrax) { */
-        /*         /\* console.log("Frax hedge", hedge, i); *\/ */
-        /*         /\* miFrax = i; *\/ */
-        /*     } else if (address(Vault(hedge).tokenInsured()) == arbitrumDai) { */
-        /*         /\* console.log("Dai hedge ", hedge, i); *\/ */
-        /*         /\* miDai = i; *\/ */
-        /*     } */
-        /* } */
-
-        console.log("miUSDC", miUSDC);
-        console.log("miUSDT", miUSDT);
-        console.log("miFrax", miFrax);
-        console.log("miDai ", miDai);
 
         StakedGLPYieldSource source = new StakedGLPYieldSource(address(stakedGLP),
                                                                arbitrumWeth,
@@ -107,9 +82,9 @@ contract DeployFakeSelfInsuredVaultScript is BaseScript {
         providerFrax.transferOwnership(address(vault));
 
         vault.addInsuranceProvider(providerUSDC, 7_90);  // 7.90%
-        /* vault.addInsuranceProvider(providerUSDT,   55);  // 0.55% */
-        /* vault.addInsuranceProvider(providerDai,  1_20);  // 1.20% */
-        /* vault.addInsuranceProvider(providerFrax,   55);  // 0.55% */
+        vault.addInsuranceProvider(providerUSDT,   55);  // 0.55%
+        vault.addInsuranceProvider(providerDai,  1_20);  // 1.20%
+        vault.addInsuranceProvider(providerFrax,   55);  // 0.55%
 
         vault.addRewardToken(y2kToken);
 
@@ -139,39 +114,9 @@ contract DeployFakeSelfInsuredVaultScript is BaseScript {
     }
 
     function providerForIndex(uint256 marketIndex, address beneficiary) public returns (Y2KEarthquakeV1InsuranceProvider) {
-
-        console.log("");
-        console.log("");
-        console.log("===");
-        console.log("Looking up vHedge for", marketIndex);
         vHedge = Vault(vaultFactory.getVaults(marketIndex)[0]);
-        console.log("Got", address(vHedge));
-
         Y2KEarthquakeV1InsuranceProvider provider;
         provider = new Y2KEarthquakeV1InsuranceProvider(address(vHedge), beneficiary, marketIndex);
-
-        uint256 len = vHedge.epochsLength();
-        console.log("LEN", len);
-
-        for (uint256 i = len - 1; i > len - 4; i--) {
-            uint256 epochId = vHedge.epochs(i);
-            uint256 end = epochId;
-            uint256 begin = vHedge.idEpochBegin(epochId);
-            address addr = provider.rewardsFactory().getFarmAddresses(marketIndex, begin, end)[0];
-
-            console.log("addr:", i, addr);
-        }
-
-        /* console.log("Current epoch", epochId); */
-        /* console.log("Begin", vHedge.idEpochBegin(epochId)); */
-        /* console.log("Next epoch", provider.nextEpoch()); */
-        /* console.log("Next epoch purchasable?", provider.isNextEpochPurchasable()); */
-
-        /* console.log("provider.rewardsFactory()", address(provider.rewardsFactory())); */
-        /* console.log("addr", provider.rewardsFactory().getFarmAddresses(marketIndex, */
-        /*                                                                vHedge.idEpochBegin(epochId), */
-        /*                                                                epochId)[0]); */
-
         return provider;
     }
 }

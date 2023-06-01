@@ -206,6 +206,8 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider, Ownable, ERC115
     }
 
     function claimRewardsForAddress(address stakingRewards) public returns (uint256) {
+        if (stakingRewards == address(0)) return 0;
+
         uint256 earned = IStakingRewards(stakingRewards).earned(address(this));
         IStakingRewards(stakingRewards).getReward();
         uint256 amount = rewardToken.balanceOf(address(this));
