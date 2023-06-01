@@ -119,7 +119,7 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider {
 
         uint256 pending = 0;
         uint256 len = premium.epochsLength();
-        for (uint256 i = nextEpochIndexToClaim[marketId] + 1; i < len; i++) {
+        for (uint256 i = nextEpochIndexToClaim[marketId]; i < len; i++) {
             uint256 epochId = premium.epochs(i);
             if (
                 block.timestamp <= epochId ||

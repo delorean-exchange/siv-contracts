@@ -293,9 +293,8 @@ contract SelfInsuredVault is Ownable, ERC1155Holder {
         uint256 newPayout;
         for (uint256 i = 0; i < markets.length; i++) {
             IInsuranceProvider provider = IInsuranceProvider(markets[i].provider);
-            uint256 marketId = markets[i].marketId;
             newPayout += provider.claimPayouts(
-                marketId
+                markets[i].marketId
             );
         }
         if (totalShares != 0) {

@@ -114,7 +114,7 @@ contract Y2KEarthquakeV2InsuranceProvider is IInsuranceProvider {
         IVaultV2Extended collateral = IVaultV2Extended(vaults[1]);
 
         uint256 pending = 0;
-        for (uint256 i = nextEpochIndexToClaim[marketId] + 1; i < epochs.length; i++) {
+        for (uint256 i = nextEpochIndexToClaim[marketId]; i < epochs.length; i++) {
             (, uint40 epochEnd, ) = premium.getEpochConfig(
                 epochs[i]
             );
@@ -172,7 +172,6 @@ contract Y2KEarthquakeV2InsuranceProvider is IInsuranceProvider {
      * @param marketId Market Id
      */
     function claimPayouts(uint256 marketId) external returns (uint256 amount) {
-        (,,address underlyingAsset) = vaultFactory.marketIdInfo(marketId);
         uint256[] memory epochs = vaultFactory.getEpochsByMarketId(marketId);
         address[2] memory vaults = vaultFactory.getVaults(marketId);
 
