@@ -7,17 +7,17 @@ import {SafeERC20} from "openzeppelin/token/ERC20/utils/SafeERC20.sol";
 import {Math} from "openzeppelin/utils/math/Math.sol";
 
 import {IInsuranceProvider} from "../interfaces/IInsuranceProvider.sol";
-import {IVaultFactoryV2Extended} from "../interfaces/earthquake/IVaultFactoryV2Extended.sol";
-import {IVaultV2Extended} from "../interfaces/earthquake/IVaultV2Extended.sol";
+import {ICarouselFactoryExtended} from "../interfaces/earthquake/ICarouselFactoryExtended.sol";
+import {ICarouselExtended} from "../interfaces/earthquake/ICarouselExtended.sol";
 
 /// @title Insurance Provider for Y2k Earthquake v2
 /// @author Y2K Finance
 /// @dev All function calls are currently implemented without side effects
-contract Y2KEarthquakeV2InsuranceProvider is IInsuranceProvider {
+contract Y2KEarthquakeCarouselInsuranceProvider is IInsuranceProvider {
     using SafeERC20 for IERC20;
 
     /// @notice Earthquake vault factory
-    IVaultFactoryV2Extended public immutable vaultFactory;
+    ICarouselFactoryExtended public immutable carouselFactory;
 
     /// @notice Last claimed epoch index; Market Id => Epoch Index
     mapping(uint256 => uint256) public nextEpochIndexToClaim;
@@ -27,11 +27,11 @@ contract Y2KEarthquakeV2InsuranceProvider is IInsuranceProvider {
     //////////////////////////////////////////////////////////////*/
     /**
      * @notice Constructor
-     * @param _vaultFactory Address of Earthquake v2 vault factory.
+     * @param _carouselFactory Address of Earthquake v2 vault factory.
      */
-    constructor(address _vaultFactory) {
-        require(_vaultFactory != address(0), "VaultFactory zero address");
-        vaultFactory = IVaultFactoryV2Extended(_vaultFactory);
+    constructor(address _carouselFactory) {
+        require(_carouselFactory != address(0), "Factory zero address");
+        carouselFactory = ICarouselFactoryExtended(_carouselFactory);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -40,8 +40,8 @@ contract Y2KEarthquakeV2InsuranceProvider is IInsuranceProvider {
     /**
      * @notice Returns emissions token address.
      */
-    function emissionsToken() external pure returns (address) {
-        return address(0);
+    function emissionsToken() external view returns (address) {
+        return carouselFactory.emissionsToken();
     }
 
     /**
@@ -49,7 +49,7 @@ contract Y2KEarthquakeV2InsuranceProvider is IInsuranceProvider {
      * @param marketId Market Id
      */
     function getVaults(uint256 marketId) external view returns (address[2] memory) {
-        return vaultFactory.getVaults(marketId);
+        return carouselFactory.getVaults(marketId);
     }
 
     /**
@@ -57,12 +57,12 @@ contract Y2KEarthquakeV2InsuranceProvider is IInsuranceProvider {
      * @dev If epoch iteration takes long, then we can think of binary search
      * @param vault Earthquake vault
      */
-    function currentEpoch(IVaultV2Extended vault) public view returns (uint256) {
+    function currentEpoch(ICarouselExtended vault) public view returns (uint256) {
         uint256 len = vault.getEpochsLength();
         if (len > 0) {
             for (uint256 i = len - 1; i >= 0; i--) {
                 uint256 epochId = vault.epochs(i);
-                (uint40 epochBegin, uint40 epochEnd, ) = vault.getEpochConfig(
+                (uint40 epochBegin, uint40 epochEnd) = vault.getEpochConfig(
                     epochId
                 );
                 if (block.timestamp > epochEnd) {
@@ -85,28 +85,25 @@ contract Y2KEarthquakeV2InsuranceProvider is IInsuranceProvider {
      * @notice Returns the next epoch.
      * @param vault Earthquake vault
      */
-    function nextEpoch(IVaultV2Extended vault) public view returns (uint256) {
+    function nextEpoch(ICarouselExtended vault) public view returns (uint256) {
         uint256 len = vault.getEpochsLength();
         if (len == 0) return 0;
         uint256 epochId = vault.epochs(len - 1);
-        (uint40 epochBegin, , ) = vault.getEpochConfig(epochId);
-        // TODO: should we handle the sitaution where there are two epochs at the end,
-        // both of which are not started? it is unlikely but may happen if there is a
-        // misconfiguration on Y2K side
+        (uint40 epochBegin, ) = vault.getEpochConfig(epochId);
         if (block.timestamp > epochBegin) return 0;
         return epochId;
     }
 
     /**
      * @notice Is next epoch purchasable.
-     * @param marketId Market Id
      */
-    function isNextEpochPurchasable(uint256 marketId) external view returns (bool) {
-        address[2] memory vaults = vaultFactory.getVaults(marketId);
-        IVaultV2Extended vault = IVaultV2Extended(vaults[0]);
-        uint256 id = nextEpoch(vault);
-        (uint40 epochBegin, , ) = vault.getEpochConfig(id);
-        return id > 0 && block.timestamp <= epochBegin;
+    function isNextEpochPurchasable(uint256) external pure returns (bool) {
+        return true;
+        // address[2] memory vaults = carouselFactory.getVaults(marketId);
+        // ICarouselExtended vault = ICarouselExtended(vaults[0]);
+        // uint256 id = nextEpoch(vault);
+        // (uint40 epochBegin, ) = vault.getEpochConfig(id);
+        // return id > 0 && block.timestamp <= epochBegin;
     }
 
     /**
@@ -114,14 +111,14 @@ contract Y2KEarthquakeV2InsuranceProvider is IInsuranceProvider {
      * @param marketId Market Id
      */
     function pendingPayouts(uint256 marketId) external view returns (uint256 pending) {
-        address[2] memory vaults = vaultFactory.getVaults(marketId);
-        uint256[] memory epochs = vaultFactory.getEpochsByMarketId(marketId);
+        address[2] memory vaults = carouselFactory.getVaults(marketId);
+        uint256[] memory epochs = carouselFactory.getEpochsByMarketId(marketId);
 
-        IVaultV2Extended premium = IVaultV2Extended(vaults[0]);
-        IVaultV2Extended collateral = IVaultV2Extended(vaults[1]);
+        ICarouselExtended premium = ICarouselExtended(vaults[0]);
+        ICarouselExtended collateral = ICarouselExtended(vaults[1]);
 
         for (uint256 i = nextEpochIndexToClaim[marketId]; i < epochs.length; i++) {
-            (, uint40 epochEnd, ) = premium.getEpochConfig(
+            (, uint40 epochEnd) = premium.getEpochConfig(
                 epochs[i]
             );
             if (
@@ -141,9 +138,32 @@ contract Y2KEarthquakeV2InsuranceProvider is IInsuranceProvider {
 
     /**
      * @notice Pending emissions.
+     * @param marketId Market Id
      */
-    function pendingEmissions(uint256) external pure returns (uint256) {
-        return 0;
+    function pendingEmissions(uint256 marketId) external view returns (uint256 pending) {
+        address[2] memory vaults = carouselFactory.getVaults(marketId);
+        uint256[] memory epochs = carouselFactory.getEpochsByMarketId(marketId);
+
+        ICarouselExtended premium = ICarouselExtended(vaults[0]);
+        ICarouselExtended collateral = ICarouselExtended(vaults[1]);
+
+        for (uint256 i = nextEpochIndexToClaim[marketId]; i < epochs.length; i++) {
+            (, uint40 epochEnd) = premium.getEpochConfig(
+                epochs[i]
+            );
+            if (
+                block.timestamp <= epochEnd ||
+                !premium.epochResolved(epochs[i]) ||
+                !collateral.epochResolved(epochs[i])
+            ) {
+                break;
+            }
+
+            uint256 premiumShares = premium.balanceOf(msg.sender, epochs[i]);
+            uint256 collateralShares = collateral.balanceOf(msg.sender, epochs[i]);
+            pending += premium.previewEmissionsWithdraw(epochs[i], premiumShares);
+            pending += collateral.previewEmissionsWithdraw(epochs[i], collateralShares);
+        }
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -161,15 +181,15 @@ contract Y2KEarthquakeV2InsuranceProvider is IInsuranceProvider {
         uint256 amountPremium,
         uint256 amountCollateral
     ) external {
-        (,,address underlyingAsset) = vaultFactory.marketIdInfo(marketId);
-        address[2] memory vaults = vaultFactory.getVaults(marketId);
+        (,,address underlyingAsset) = carouselFactory.marketIdInfo(marketId);
+        address[2] memory vaults = carouselFactory.getVaults(marketId);
         IERC20(underlyingAsset).safeTransferFrom(msg.sender, address(this), amountPremium + amountCollateral);
         IERC20(underlyingAsset).safeApprove(vaults[0], amountPremium);
         IERC20(underlyingAsset).safeApprove(vaults[1], amountCollateral);
 
-        uint256 nextEpochId = nextEpoch(IVaultV2Extended(vaults[0]));
-        IVaultV2Extended(vaults[0]).deposit(nextEpochId, amountPremium, msg.sender);
-        IVaultV2Extended(vaults[1]).deposit(nextEpochId, amountCollateral, msg.sender);
+        uint256 nextEpochId = nextEpoch(ICarouselExtended(vaults[0]));
+        ICarouselExtended(vaults[0]).deposit(nextEpochId, amountPremium, msg.sender);
+        ICarouselExtended(vaults[1]).deposit(nextEpochId, amountCollateral, msg.sender);
     }
 
     /**
@@ -177,15 +197,15 @@ contract Y2KEarthquakeV2InsuranceProvider is IInsuranceProvider {
      * @param marketId Market Id
      */
     function claimPayouts(uint256 marketId) external returns (uint256 amount) {
-        uint256[] memory epochs = vaultFactory.getEpochsByMarketId(marketId);
-        address[2] memory vaults = vaultFactory.getVaults(marketId);
+        uint256[] memory epochs = carouselFactory.getEpochsByMarketId(marketId);
+        address[2] memory vaults = carouselFactory.getVaults(marketId);
 
-        IVaultV2Extended premium = IVaultV2Extended(vaults[0]);
-        IVaultV2Extended collateral = IVaultV2Extended(vaults[1]);
+        ICarouselExtended premium = ICarouselExtended(vaults[0]);
+        ICarouselExtended collateral = ICarouselExtended(vaults[1]);
 
         uint256 i = nextEpochIndexToClaim[marketId];
         for (; i < epochs.length; i++) {
-            (, uint40 epochEnd, ) = premium.getEpochConfig(
+            (, uint40 epochEnd) = premium.getEpochConfig(
                 epochs[i]
             );
             if (

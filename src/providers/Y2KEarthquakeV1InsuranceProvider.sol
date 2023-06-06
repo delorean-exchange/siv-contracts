@@ -46,6 +46,13 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider {
                                 GETTERS
     //////////////////////////////////////////////////////////////*/
     /**
+     * @notice Returns emissions token address.
+     */
+    function emissionsToken() external pure returns (address) {
+        return address(0);
+    }
+
+    /**
      * @notice Returns vault addresses.
      * @param marketId Market Id
      */
@@ -111,13 +118,12 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider {
      * @notice Pending payouts.
      * @param marketId Market Id
      */
-    function pendingPayouts(uint256 marketId) external view returns (uint256) {
+    function pendingPayouts(uint256 marketId) external view returns (uint256 pending) {
         address[2] memory vaults = getVaults(marketId);
 
         IVault premium = IVault(vaults[0]);
         IVault collateral = IVault(vaults[1]);
 
-        uint256 pending = 0;
         uint256 len = premium.epochsLength();
         for (uint256 i = nextEpochIndexToClaim[marketId]; i < len; i++) {
             uint256 epochId = premium.epochs(i);
@@ -134,13 +140,12 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider {
             pending += premium.previewWithdraw(epochId, premiumShares);
             pending += collateral.previewWithdraw(epochId, collateralShares);
         }
-        return pending;
     }
 
     /**
-     * @notice Pending rewards, zero for now.
+     * @notice Pending emissions.
      */
-    function pendingRewards(uint256) external view returns (uint256) {
+    function pendingEmissions(uint256) external pure returns (uint256) {
         return 0;
     }
 
@@ -211,12 +216,5 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider {
             }
         }
         nextEpochIndexToClaim[marketId] = i;
-    }
-
-    /**
-     * @notice Claim rewards, zero for now.
-     */
-    function claimRewards(uint256) external returns (uint256) {
-        return 0;
     }
 }

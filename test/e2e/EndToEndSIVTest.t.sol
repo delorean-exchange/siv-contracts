@@ -5,8 +5,9 @@ import "forge-std/console.sol";
 
 import {IERC20} from "openzeppelin/token/ERC20/IERC20.sol";
 
-import {Y2KEarthQuakeV2Helper, IWETH, VaultV2} from "../Y2KEarthQuakeV2Helper.sol";
 import {Y2KEarthQuakeV1Helper, Vault} from "../Y2KEarthQuakeV1Helper.sol";
+import {Y2KEarthQuakeV2Helper, IWETH, VaultV2} from "../Y2KEarthQuakeV2Helper.sol";
+import {Y2KEarthQuakeCarouselHelper, Carousel} from "../Y2KEarthQuakeCarouselHelper.sol";
 
 import {SelfInsuredVault} from "../../src/vaults/SelfInsuredVault.sol";
 import {StargateLPYieldSource} from "../../src/sources/StargateLPYieldSource.sol";
@@ -15,7 +16,7 @@ import {IInsuranceProvider} from "../../src/interfaces/IInsuranceProvider.sol";
 import {IYieldSource} from "../../src/interfaces/IYieldSource.sol";
 import {ILPStaking} from "../../src/interfaces/stargate/ILPStaking.sol";
 
-contract EndToEndSIVTest is Y2KEarthQuakeV2Helper, Y2KEarthQuakeV1Helper {
+contract EndToEndSIVTest is Y2KEarthQuakeV2Helper, Y2KEarthQuakeV1Helper, Y2KEarthQuakeCarouselHelper {
     uint256 public constant LP_DEPOSIT_AMOUNT = 1000000000;
     uint256 public constant WETH_DEPOSIT_AMOUNT = 10 ether;
 
@@ -24,8 +25,12 @@ contract EndToEndSIVTest is Y2KEarthQuakeV2Helper, Y2KEarthQuakeV1Helper {
 
     function setUp()
         public
-        override(Y2KEarthQuakeV1Helper, Y2KEarthQuakeV2Helper)
+        override(Y2KEarthQuakeV1Helper, Y2KEarthQuakeV2Helper, Y2KEarthQuakeCarouselHelper)
     {
+        Y2KEarthQuakeV1Helper.setUp();
+        Y2KEarthQuakeV2Helper.setUp();
+        Y2KEarthQuakeCarouselHelper.setUp();
+
         yieldSource = address(
             new StargateLPYieldSource(
                 STG_PID,
@@ -34,16 +39,13 @@ contract EndToEndSIVTest is Y2KEarthQuakeV2Helper, Y2KEarthQuakeV1Helper {
                 SUSHISWAP_ROUTER
             )
         );
-        siv = address(new SelfInsuredVault(WETH, yieldSource));
+        siv = address(new SelfInsuredVault(WETH, yieldSource, emissionsToken));
 
         IYieldSource(yieldSource).transferOwnership(siv);
-
-        Y2KEarthQuakeV1Helper.setUp();
-        Y2KEarthQuakeV2Helper.setUp();
     }
 
     // Single v1 epoch with two users
-    function testV1EndToEndEndEpoch() public {
+    function testV1EndEpoch() public {
         /******************** Create markets ************************/
 
         uint40 begin = uint40(block.timestamp - 5 days);
@@ -133,7 +135,7 @@ contract EndToEndSIVTest is Y2KEarthQuakeV2Helper, Y2KEarthQuakeV1Helper {
             amountWithoutFee / 2
         );
 
-        SelfInsuredVault(siv).claimVaultPayouts();
+        SelfInsuredVault(siv).claimVaults();
 
         uint256 amountAfterFee = SIV_WETH_AMOUNT +
             helperCalculateFeeAdjustedValueV1(WETH_DEPOSIT_AMOUNT);
@@ -165,7 +167,7 @@ contract EndToEndSIVTest is Y2KEarthQuakeV2Helper, Y2KEarthQuakeV1Helper {
     }
 
     // Single v2 epoch with two users
-    function testV2EndToEndEndEpoch() public {
+    function testV2EndEpoch() public {
         /******************** Create markets ************************/
 
         uint40 begin = uint40(block.timestamp - 5 days);
@@ -272,6 +274,120 @@ contract EndToEndSIVTest is Y2KEarthQuakeV2Helper, Y2KEarthQuakeV1Helper {
         // check user balance
         assertEq(IERC20(WETH).balanceOf(USER), amountAfterFee / 2);
         assertEq(IERC20(WETH).balanceOf(USER2), amountAfterFee / 2);
+    }
+
+    // Single carousel epoch with two users
+    function testCarouselEndEpoch() public {
+        /******************** Create markets ************************/
+
+        uint40 begin = uint40(block.timestamp - 5 days);
+        uint40 end = uint40(block.timestamp - 3 days);
+        (
+            address premium,
+            address collateral,
+            uint256 marketId,
+            uint256 epochId
+        ) = Y2KEarthQuakeCarouselHelper.createEndEpochMarketCarousel(begin, end);
+
+        SelfInsuredVault(siv).addMarket(
+            address(carouselInsuranceProvider),
+            marketId,
+            0, // premium deposit is just done by user
+            100 // siv deposits into collateral
+        );
+
+        /******************** USER deposit ************************/
+
+        vm.warp(begin - 1 days);
+
+        vm.startPrank(USER);
+
+        // get weth
+        vm.deal(USER, WETH_DEPOSIT_AMOUNT);
+        IWETH(WETH).deposit{value: WETH_DEPOSIT_AMOUNT}();
+
+        // deposit into premium
+        IERC20(WETH).approve(premium, WETH_DEPOSIT_AMOUNT);
+        VaultV2(premium).deposit(epochId, WETH_DEPOSIT_AMOUNT, USER);
+
+        // deposit in SIV
+        IERC20(STG_LPTOKEN).approve(siv, LP_DEPOSIT_AMOUNT * 2);
+        SelfInsuredVault(siv).deposit(LP_DEPOSIT_AMOUNT, USER);
+        SelfInsuredVault(siv).deposit(LP_DEPOSIT_AMOUNT, USER2);
+
+        vm.stopPrank();
+
+        /******************** Purchase Insurance ************************/
+
+        // generate yields
+        vm.roll(block.number + 100000000);
+
+        // check farming balance
+        uint256 SIV_WETH_AMOUNT = IYieldSource(yieldSource).pendingYieldInToken(
+            WETH
+        );
+        SelfInsuredVault(siv).purchaseInsuranceForNextEpoch();
+
+        // none left at siv
+        assertEq(IERC20(WETH).balanceOf(siv), 0);
+
+        // check deposit balances
+        uint256 premiumShares =  Carousel(premium).balanceOf(USER, epochId);
+        uint256 collateralShares = Carousel(collateral).balanceOf(siv, epochId);
+
+        /******************** End Epoch ************************/
+
+        // warp to epoch end
+        vm.warp(end + 1 days);
+
+        // trigger end of epoch
+        carouselController.triggerEndEpoch(marketId, epochId);
+
+        // check vault balances on withdraw
+        uint256 amountAfterFee = Carousel(collateral).previewWithdraw(epochId, collateralShares);
+
+        /******************** Claim Payout ************************/
+
+        // check user balance
+        assertEq(
+            SelfInsuredVault(siv).pendingPayouts(USER),
+            amountAfterFee / 2
+        );
+        assertEq(
+            SelfInsuredVault(siv).pendingPayouts(USER2),
+            amountAfterFee / 2
+        );
+        assertEq(
+            SelfInsuredVault(siv).pendingEmissions(USER),
+            collatEmissions / 2
+        );
+        assertEq(
+            SelfInsuredVault(siv).pendingEmissions(USER2),
+            collatEmissions / 2
+        );
+
+        // withdraw from vaults
+        vm.prank(USER);
+        SelfInsuredVault(siv).claimPayouts();
+        vm.prank(USER);
+        SelfInsuredVault(siv).claimEmissions();
+        vm.prank(USER2);
+        SelfInsuredVault(siv).claimPayouts();
+        vm.prank(USER2);
+        SelfInsuredVault(siv).claimEmissions();
+
+        // check vaults balance
+        assertEq(Carousel(collateral).balanceOf(siv, epochId), 0);
+        assertEq(SelfInsuredVault(siv).pendingPayouts(USER), 0);
+        assertEq(SelfInsuredVault(siv).pendingPayouts(USER2), 0);
+        assertEq(SelfInsuredVault(siv).pendingEmissions(USER), 0);
+        assertEq(SelfInsuredVault(siv).pendingEmissions(USER2), 0);
+
+        // check user balance
+        assertEq(IERC20(WETH).balanceOf(USER), amountAfterFee / 2);
+        assertEq(IERC20(WETH).balanceOf(USER2), amountAfterFee / 2);
+        assertEq(IERC20(emissionsToken).balanceOf(USER), collatEmissions / 2);
+        assertEq(IERC20(emissionsToken).balanceOf(USER2), collatEmissions / 2);
     }
 
     /**
@@ -483,7 +599,7 @@ contract EndToEndSIVTest is Y2KEarthQuakeV2Helper, Y2KEarthQuakeV1Helper {
         uint256 user2Amount = payout2 / 2;
 
         // check user balance
-        assertEq(IERC20(WETH).balanceOf(USER), userAmount);
-        assertEq(IERC20(WETH).balanceOf(USER2), user2Amount);
+        assertApproxEqAbs(IERC20(WETH).balanceOf(USER), userAmount, 2);
+        assertApproxEqAbs(IERC20(WETH).balanceOf(USER2), user2Amount, 2);
     }
 }

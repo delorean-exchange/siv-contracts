@@ -21,7 +21,7 @@ abstract contract IYieldSource is Ownable {
 
     function withdraw(uint256 amount, bool claim, address to) external virtual;
 
-    function harvestAndConvert(
+    function claimAndConvert(
         address outToken,
         uint256 amount
     ) external virtual returns (uint256, uint256);

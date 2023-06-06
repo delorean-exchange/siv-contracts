@@ -115,7 +115,7 @@ contract StargateLPYieldSource is IYieldSource {
     /**
      * @notice Harvest rewards
      */
-    function harvestAndConvert(
+    function claimAndConvert(
         address outToken,
         uint256 amount
     ) external override onlyOwner returns (uint256 yieldAmount, uint256 actualOut) {

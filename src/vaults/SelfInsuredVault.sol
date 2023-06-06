@@ -31,6 +31,7 @@ contract SelfInsuredVault is Ownable, ERC1155Holder {
     struct UserInfo {
         uint256 share;
         int256 payoutDebt;
+        int256 emissionsDebt;
     }
 
     struct MarketInfo {
@@ -51,6 +52,9 @@ contract SelfInsuredVault is Ownable, ERC1155Holder {
     /// @notice Token to be paid in for insurance
     IERC20 public immutable paymentToken;
 
+    /// @notice Token to be paid in for insurance
+    IERC20 public immutable emissionsToken;
+
     /// @notice Yield source contract
     IYieldSource public immutable yieldSource;
 
@@ -65,13 +69,19 @@ contract SelfInsuredVault is Ownable, ERC1155Holder {
     /// @notice Global payout per share
     uint256 public accPayoutPerShare;
 
+    /// @notice Global emissions per share
+    uint256 public accEmissionsPerShare;
+
     /// @notice User Share info
     mapping(address => UserInfo) public userInfos;
 
     // -- Events -- //
 
     /// @notice Emitted when `user` claimed payout
-    event ClaimPayouts(address indexed user, uint256 amount);
+    event ClaimPayouts(address indexed user, uint256 payout);
+
+    /// @notice Emitted when `user` claimed emissions
+    event ClaimEmissions(address indexed user, uint256 emissions);
 
     /*//////////////////////////////////////////////////////////////
                                 CONSTRUCTOR
@@ -82,12 +92,17 @@ contract SelfInsuredVault is Ownable, ERC1155Holder {
      * @param _paymentToken Token used for premium
      * @param _yieldSource Yield source contract address
      */
-    constructor(address _paymentToken, address _yieldSource) {
+    constructor(
+        address _paymentToken,
+        address _yieldSource,
+        address _emissionsToken
+    ) {
         require(_yieldSource != address(0), "SIV: zero source");
 
         depositToken = IYieldSource(_yieldSource).sourceToken();
         paymentToken = IERC20(_paymentToken);
         yieldSource = IYieldSource(_yieldSource);
+        emissionsToken = IERC20(_emissionsToken);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -109,7 +124,15 @@ contract SelfInsuredVault is Ownable, ERC1155Holder {
     ) external onlyOwner {
         require(markets.length < MAX_MARKETS, "SIV: max markets");
 
-        address[2] memory vaults = IInsuranceProvider(_provider).getVaults(_marketId);
+        address emisToken = IInsuranceProvider(_provider).emissionsToken();
+        require(
+            emisToken == address(0) || IERC20(emisToken) == emissionsToken,
+            "SIV: invalid emissions token"
+        );
+
+        address[2] memory vaults = IInsuranceProvider(_provider).getVaults(
+            _marketId
+        );
         IERC1155(vaults[0]).setApprovalForAll(_provider, true);
         IERC1155(vaults[1]).setApprovalForAll(_provider, true);
 
@@ -149,7 +172,7 @@ contract SelfInsuredVault is Ownable, ERC1155Holder {
         if (totalWeight == 0) return;
 
         uint256 totalYield = yieldSource.pendingYield();
-        (, uint256 actualOut) = yieldSource.harvestAndConvert(
+        (, uint256 actualOut) = yieldSource.claimAndConvert(
             address(paymentToken),
             totalYield
         );
@@ -189,17 +212,34 @@ contract SelfInsuredVault is Ownable, ERC1155Holder {
     }
 
     /**
+     * @notice Returns if emission is set for this Vault
+     */
+    function isEmissionsEnabled() public view returns (bool) {
+        return address(emissionsToken) != address(0);
+    }
+
+    /**
      * @notice Returns pending payouts of an insurance
      */
-    function pendingInsurancePayouts() public view returns (uint256) {
-        uint256 sum = 0;
+    function pendingInsurancePayouts() public view returns (uint256 pending) {
         for (uint256 i = 0; i < markets.length; i++) {
             IInsuranceProvider provider = IInsuranceProvider(
                 markets[i].provider
             );
-            sum += provider.pendingPayouts(markets[i].marketId);
+            pending += provider.pendingPayouts(markets[i].marketId);
         }
-        return sum;
+    }
+
+    /**
+     * @notice Returns pending emissions of an insurance
+     */
+    function pendingInsuranceEmissions() public view returns (uint256 pending) {
+        for (uint256 i = 0; i < markets.length; i++) {
+            IInsuranceProvider provider = IInsuranceProvider(
+                markets[i].provider
+            );
+            pending += provider.pendingEmissions(markets[i].marketId);
+        }
     }
 
     /**
@@ -224,6 +264,27 @@ contract SelfInsuredVault is Ownable, ERC1155Holder {
         ) - info.payoutDebt).toUint256();
     }
 
+    /**
+     * @notice Returns claimable emissions of `user`
+     * @param user address for receive
+     */
+    function pendingEmissions(
+        address user
+    ) public view returns (uint256 pending) {
+        UserInfo storage info = userInfos[user];
+        uint256 newAccEmitPerShare = accEmissionsPerShare;
+        uint256 totalShares = yieldSource.totalDeposit();
+        if (totalShares != 0) {
+            uint256 newEmissions = pendingInsuranceEmissions();
+            newAccEmitPerShare +=
+                (newEmissions * PRECISION_FACTOR) /
+                totalShares;
+        }
+        pending = (int256(
+            (info.share * newAccEmitPerShare) / PRECISION_FACTOR
+        ) - info.emissionsDebt).toUint256();
+    }
+
     /*//////////////////////////////////////////////////////////////
                                 USER OPERATIONS
     //////////////////////////////////////////////////////////////*/
@@ -234,13 +295,16 @@ contract SelfInsuredVault is Ownable, ERC1155Holder {
      * @param receiver for share
      */
     function deposit(uint256 amount, address receiver) public {
-        claimVaultPayouts();
+        claimVaults();
 
         UserInfo storage user = userInfos[receiver];
         user.share += amount;
-        user.payoutDebt =
-            user.payoutDebt +
-            int256((amount * accPayoutPerShare) / PRECISION_FACTOR);
+        user.payoutDebt += int256(
+            (amount * accPayoutPerShare) / PRECISION_FACTOR
+        );
+        user.emissionsDebt += int256(
+            (amount * accEmissionsPerShare) / PRECISION_FACTOR
+        );
 
         depositToken.safeTransferFrom(msg.sender, address(this), amount);
         if (depositToken.allowance(address(this), address(yieldSource)) != 0) {
@@ -256,12 +320,15 @@ contract SelfInsuredVault is Ownable, ERC1155Holder {
      * @param to receiver address
      */
     function withdraw(uint256 amount, address to) public {
-        claimVaultPayouts();
+        claimVaults();
 
         UserInfo storage user = userInfos[msg.sender];
-        user.payoutDebt =
-            user.payoutDebt -
-            int256((amount * accPayoutPerShare) / PRECISION_FACTOR);
+        user.payoutDebt -= int256(
+            (amount * accPayoutPerShare) / PRECISION_FACTOR
+        );
+        user.emissionsDebt -= int256(
+            (amount * accEmissionsPerShare) / PRECISION_FACTOR
+        );
         user.share -= amount;
 
         yieldSource.withdraw(amount, false, to);
@@ -271,37 +338,68 @@ contract SelfInsuredVault is Ownable, ERC1155Holder {
      * @notice Claim payouts
      */
     function claimPayouts() public {
-        claimVaultPayouts();
+        claimVaults();
 
         UserInfo storage user = userInfos[msg.sender];
         int256 accPayout = int256(
             (user.share * accPayoutPerShare) / PRECISION_FACTOR
         );
-        uint256 pending = (accPayout - user.payoutDebt).toUint256();
+        uint256 pendingPayout = (accPayout - user.payoutDebt).toUint256();
         user.payoutDebt = accPayout;
 
-        paymentToken.safeTransfer(msg.sender, pending);
+        if (pendingPayout == 0) return;
+        paymentToken.safeTransfer(msg.sender, pendingPayout);
 
-        emit ClaimPayouts(msg.sender, pending);
+        emit ClaimPayouts(msg.sender, pendingPayout);
+    }
+
+    /**
+     * @notice Claim emissions
+     */
+    function claimEmissions() public {
+        if (!isEmissionsEnabled()) return;
+
+        claimVaults();
+
+        UserInfo storage user = userInfos[msg.sender];
+        int256 accEmissions = int256(
+            (user.share * accEmissionsPerShare) / PRECISION_FACTOR
+        );
+        uint256 pendingEmits = (accEmissions - user.emissionsDebt).toUint256();
+        user.emissionsDebt = accEmissions;
+
+        if (pendingEmits == 0) return;
+        emissionsToken.safeTransfer(msg.sender, pendingEmits);
+
+        emit ClaimEmissions(msg.sender, pendingEmits);
     }
 
     /**
      * @notice Claim payout of a vault
      */
-    function claimVaultPayouts() public {
+    function claimVaults() public {
         uint256 totalShares = yieldSource.totalDeposit();
         uint256 newPayout;
+        uint256 currentEmissionBalance;
+        if (isEmissionsEnabled()) {
+            currentEmissionBalance = emissionsToken.balanceOf(address(this));
+        }
         for (uint256 i = 0; i < markets.length; i++) {
-            IInsuranceProvider provider = IInsuranceProvider(markets[i].provider);
-            newPayout += provider.claimPayouts(
-                markets[i].marketId
+            IInsuranceProvider provider = IInsuranceProvider(
+                markets[i].provider
             );
+            newPayout += provider.claimPayouts(markets[i].marketId);
         }
         if (totalShares != 0) {
-            accPayoutPerShare =
-                accPayoutPerShare +
-                (newPayout * PRECISION_FACTOR) /
-                totalShares;
+            accPayoutPerShare += (newPayout * PRECISION_FACTOR) / totalShares;
+
+            if (isEmissionsEnabled()) {
+                uint256 newEmissions = emissionsToken.balanceOf(address(this)) -
+                    currentEmissionBalance;
+                accEmissionsPerShare +=
+                    (newEmissions * PRECISION_FACTOR) /
+                    totalShares;
+            }
         }
     }
 }

@@ -10,9 +10,9 @@ interface IInsuranceProvider {
 
     function pendingPayouts(uint256) external view returns (uint256);
 
+    function pendingEmissions(uint256) external view returns (uint256);
+
     function claimPayouts(uint256) external returns (uint256);
 
-    function pendingRewards(uint256) external view returns (uint256);
-
-    function claimRewards(uint256) external returns (uint256);
+    function emissionsToken() external view returns (address);
 }
