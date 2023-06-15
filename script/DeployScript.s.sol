@@ -18,6 +18,7 @@ contract DeployScript is Script, HelperConfig {
         console2.log("Factory v1", config.factoryV1);
         console2.log("Factory V2", config.factoryV2);
         console2.log("Carousel factory", config.carouselFactory);
+        console2.log("Payment Token", config.paymentToken);
         console2.log("Emissions Token", config.emissionsToken);
 
         console2.log("Stargate Pool id", config.stargatePoolId);
@@ -67,5 +68,18 @@ contract DeployScript is Script, HelperConfig {
         console2.log("Self Insured Vault", address(siv));
 
         console2.log("\n");
+
+        {
+            string memory objName = "deploy";
+            string memory json;
+            json = vm.serializeAddress(objName, "insuranceProviderV1", address(insuranceProviderV1));
+            json = vm.serializeAddress(objName, "insuranceProviderV2", address(insuranceProviderV2));
+            json = vm.serializeAddress(objName, "carouselInsuranceProvider", address(carouselInsuranceProvider));
+            json = vm.serializeAddress(objName, "yieldSource", address(yieldSource));
+            json = vm.serializeAddress(objName, "selfInsuredVault", address(siv));
+
+            string memory filename = "./json/deploy.json";
+            vm.writeJson(json, filename);
+        }
     }
 }

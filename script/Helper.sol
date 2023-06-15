@@ -8,29 +8,33 @@ contract HelperConfig is Script {
     using stdJson for string;
 
     struct DeployConfig {
+        address carouselFactory;
+        address emissionsToken;
         address factoryV1;
         address factoryV2;
-        address carouselFactory;
         address paymentToken;
-        address emissionsToken;
-        uint256 stargatePoolId;
         address stargateLPToken;
+        uint256 stargatePoolId;
         address stargateStaking;
         address sushiRouter;
     }
 
     struct ConfigMarket {
-        address insuranceProvider;
-        uint256 strikePrice;
-        address token;
+        uint256 collateralWeight;
         address depositAsset;
+        address insuranceProvider;
         uint256 marketId;
         uint256 premiumWeight;
-        uint256 collateralWeight;
+        uint256 strikePrice;
+        address token;
     }
 
     struct Contracts {
-        address siv;
+        address carouselInsuranceProvider;
+        address insuranceProviderV1;
+        address insuranceProviderV2;
+        address selfInsuredVault;
+        address yieldSource;
     }
 
     DeployConfig deployConfig;
@@ -47,11 +51,11 @@ contract HelperConfig is Script {
 
     function getSiv() public returns (address) {
         string memory root = vm.projectRoot();
-        string memory path = string.concat(root, "/script/configs/config.json");
+        string memory path = string.concat(root, "./json/deploy.json");
         string memory json = vm.readFile(path);
-        bytes memory parseJsonByteCode = json.parseRaw(".contracts");
+        bytes memory parseJsonByteCode = json.parseRaw(".deploy");
         contracts = abi.decode(parseJsonByteCode, (Contracts));
-        return contracts.siv;
+        return contracts.selfInsuredVault;
     }
 
     function getConfigMarket() public view returns (ConfigMarket[] memory markets) {
