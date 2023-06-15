@@ -1,0 +1,13 @@
+{
+    "markets": [
+        {
+            "insuranceProvider": "",
+            "strikePrice": 963000000000000000,
+            "token": "0x3f56e0c36d275367b8c502090edf38289b3dea0d",
+            "depositAsset": "0x912CE59144191C1204E64559FE8253a0e49E6548",
+            "marketId": "",
+            "premiumWeight": 50,
+            "collateralWeight": 50
+        }
+    ]
+}
