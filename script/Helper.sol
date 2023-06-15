@@ -51,9 +51,9 @@ contract HelperConfig is Script {
 
     function getSiv() public returns (address) {
         string memory root = vm.projectRoot();
-        string memory path = string.concat(root, "./json/deploy.json");
+        string memory path = string.concat(root, "/json/deploy.json");
         string memory json = vm.readFile(path);
-        bytes memory parseJsonByteCode = json.parseRaw(".deploy");
+        bytes memory parseJsonByteCode = json.parseRaw("");
         contracts = abi.decode(parseJsonByteCode, (Contracts));
         return contracts.selfInsuredVault;
     }
