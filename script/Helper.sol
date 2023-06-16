@@ -24,6 +24,7 @@ contract HelperConfig is Script {
         address depositAsset;
         address insuranceProvider;
         uint256 marketId;
+        string  name;
         uint256 premiumWeight;
         uint256 strikePrice;
         address token;

@@ -1,11 +1,52 @@
 {
     "markets": [
         {
-            "insuranceProvider": "",
+            "name": "y2kMAI_963_WETH*",
             "strikePrice": 963000000000000000,
             "token": "0x3f56e0c36d275367b8c502090edf38289b3dea0d",
-            "depositAsset": "0x912CE59144191C1204E64559FE8253a0e49E6548",
-            "marketId": "",
+            "depositAsset": "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
+            "insuranceProvider": "0x510B6935a4453Be1c787EA1f6D73Cf2285186EB3",
+            "marketId": 102062669946436220800282965814418861703520361600036198831171353773735437582898,
+            "premiumWeight": 50,
+            "collateralWeight": 50
+        },
+        {
+            "name": "y2kUSDC_997_WETH*",
+            "strikePrice": 997000000000000000,
+            "token": "0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8",
+            "depositAsset": "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
+            "insuranceProvider": "0x510B6935a4453Be1c787EA1f6D73Cf2285186EB3",
+            "marketId": 78747529850370621525761201463833537338614899618597837920824482195739019216457,
+            "premiumWeight": 50,
+            "collateralWeight": 50
+        },
+        {
+            "name": "y2kUSDD_970_WETH*",
+            "strikePrice": 970000000000000000,
+            "token": "0x680447595e8b7b3Aa1B43beB9f6098C79ac2Ab3f",
+            "depositAsset": "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
+            "insuranceProvider": "0x510B6935a4453Be1c787EA1f6D73Cf2285186EB3",
+            "marketId": 11810749631572916259290140579407728535491467368654952084793878872665389831986,
+            "premiumWeight": 50,
+            "collateralWeight": 50
+        },
+        {
+            "name": "y2kstETH_981_WETH*",
+            "strikePrice": 981000000000000000,
+            "token": "0xae7ab96520de3a18e5e111b5eaab095312d7fe84",
+            "depositAsset": "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
+            "insuranceProvider": "0x510B6935a4453Be1c787EA1f6D73Cf2285186EB3",
+            "marketId": 13460764146036414337380196068365709247259621097717951186513179471480948962666,
+            "premiumWeight": 50,
+            "collateralWeight": 50
+        },
+        {
+            "name": "y2kBUSD_998_WETH*",
+            "strikePrice": 998000000000000000,
+            "token": "0x4fabb145d64652a948d72533023f6e7a623c7c53",
+            "depositAsset": "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
+            "insuranceProvider": "0x510B6935a4453Be1c787EA1f6D73Cf2285186EB3",
+            "marketId": 111421210939391528484088102920415860233503986458498274079532691809454099237075,
             "premiumWeight": 50,
             "collateralWeight": 50
         }
