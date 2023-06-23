@@ -10,6 +10,7 @@ import {SafeERC20} from "openzeppelin/token/ERC20/utils/SafeERC20.sol";
 import {SafeCast} from "openzeppelin/utils/math/SafeCast.sol";
 import {IERC1155} from "openzeppelin/token/ERC1155/IERC1155.sol";
 import {ERC1155Holder} from "openzeppelin/token/ERC1155/utils/ERC1155Holder.sol";
+import {ReentrancyGuard} from "openzeppelin/security/ReentrancyGuard.sol";
 
 import {IYieldSource} from "../interfaces/IYieldSource.sol";
 import {IInsuranceProvider} from "../interfaces/IInsuranceProvider.sol";
@@ -24,7 +25,7 @@ import {IInsuranceProvider} from "../interfaces/IInsuranceProvider.sol";
 /// @title Self Insured Vault(SIV) contract
 /// @author Y2K Finance
 /// @dev All function calls are currently implemented without side effects
-contract SelfInsuredVault is Ownable, ERC1155Holder {
+contract SelfInsuredVault is Ownable, ERC1155Holder, ReentrancyGuard {
     using SafeERC20 for IERC20;
     using SafeCast for int256;
 
@@ -133,6 +134,8 @@ contract SelfInsuredVault is Ownable, ERC1155Holder {
         address[2] memory vaults = IInsuranceProvider(_provider).getVaults(
             _marketId
         );
+        require(vaults[0] != address(0) && vaults[1] != address(0), "SIV: Market doesn't exist");
+
         IERC1155(vaults[0]).setApprovalForAll(_provider, true);
         IERC1155(vaults[1]).setApprovalForAll(_provider, true);
 
@@ -294,8 +297,15 @@ contract SelfInsuredVault is Ownable, ERC1155Holder {
      * @param amount of `paymentToken`
      * @param receiver for share
      */
-    function deposit(uint256 amount, address receiver) public {
+    function deposit(uint256 amount, address receiver) public nonReentrant {
         claimVaults();
+
+        depositToken.safeTransferFrom(msg.sender, address(this), amount);
+        if (depositToken.allowance(address(this), address(yieldSource)) != 0) {
+            depositToken.safeApprove(address(yieldSource), 0);
+        }
+        depositToken.safeApprove(address(yieldSource), amount);
+        yieldSource.deposit(amount);
 
         UserInfo storage user = userInfos[receiver];
         user.share += amount;
@@ -305,13 +315,6 @@ contract SelfInsuredVault is Ownable, ERC1155Holder {
         user.emissionsDebt += int256(
             (amount * accEmissionsPerShare) / PRECISION_FACTOR
         );
-
-        depositToken.safeTransferFrom(msg.sender, address(this), amount);
-        if (depositToken.allowance(address(this), address(yieldSource)) != 0) {
-            depositToken.safeApprove(address(yieldSource), 0);
-        }
-        depositToken.safeApprove(address(yieldSource), amount);
-        yieldSource.deposit(amount);
     }
 
     /**
@@ -319,7 +322,7 @@ contract SelfInsuredVault is Ownable, ERC1155Holder {
      * @param amount to withdraw
      * @param to receiver address
      */
-    function withdraw(uint256 amount, address to) public {
+    function withdraw(uint256 amount, address to) public nonReentrant {
         claimVaults();
 
         UserInfo storage user = userInfos[msg.sender];
@@ -337,7 +340,7 @@ contract SelfInsuredVault is Ownable, ERC1155Holder {
     /**
      * @notice Claim payouts
      */
-    function claimPayouts() public {
+    function claimPayouts() public nonReentrant {
         claimVaults();
 
         UserInfo storage user = userInfos[msg.sender];
@@ -356,7 +359,7 @@ contract SelfInsuredVault is Ownable, ERC1155Holder {
     /**
      * @notice Claim emissions
      */
-    function claimEmissions() public {
+    function claimEmissions() public nonReentrant {
         if (!isEmissionsEnabled()) return;
 
         claimVaults();

@@ -23,6 +23,9 @@ contract AddMarkets is HelperConfig {
         for (uint256 i = 0; i < markets.length; ++i) {
             ConfigMarket memory market = markets[i];
 
+            console2.log("insuranceProvider", market.insuranceProvider);
+            console2.log("marketId", market.marketId);
+
             siv.addMarket(
                 market.insuranceProvider,
                 market.marketId,
@@ -30,8 +33,6 @@ contract AddMarkets is HelperConfig {
                 market.collateralWeight
             );
 
-            console2.log("insurnaceProvider", market.insuranceProvider);
-            console2.log("marketId", market.marketId);
             console2.log(
                 "----------------------------------------------------------------"
             );
