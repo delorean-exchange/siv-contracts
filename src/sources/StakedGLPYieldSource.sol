@@ -135,6 +135,10 @@ contract StakedGLPYieldSource is IYieldSource {
         // harvest by withdraw
         _harvest();
 
+        uint256 balance = yieldToken.balanceOf(address(this));
+        // if available reward in reward tracker is not enough
+        if (amount > balance) { amount = balance; }
+
         if (amount > 0) {
             if (outToken == address(yieldToken)) {
                 yieldToken.transfer(msg.sender, amount);
@@ -166,6 +170,7 @@ contract StakedGLPYieldSource is IYieldSource {
         uint256 before = yieldToken.balanceOf(address(this));
         rewardRouter.claimFees();
         amount = yieldToken.balanceOf(address(this)) - before;
+        rewardRouter.compound();
     }
 
     /**

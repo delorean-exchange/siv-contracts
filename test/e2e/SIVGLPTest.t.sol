@@ -15,7 +15,7 @@ import {IYieldSource} from "../../src/interfaces/IYieldSource.sol";
 import {ILPStaking} from "../../src/interfaces/stargate/ILPStaking.sol";
 
 contract SIVGLPTest is Y2KEarthQuakeHelper {
-    uint256 public constant LP_DEPOSIT_AMOUNT = 1000 ether;
+    uint256 public constant LP_DEPOSIT_AMOUNT = 1 ether;
     uint256 public constant WETH_DEPOSIT_AMOUNT = 10 ether;
 
     address public siv;
@@ -38,7 +38,7 @@ contract SIVGLPTest is Y2KEarthQuakeHelper {
 
         // prepare assets
         vm.startPrank(RICH_FSGLP);
-        IERC20(StakedGLP_TOKEN).transfer(USER, IERC20(FSGLP_TOKEN).balanceOf(RICH_FSGLP));
+        IERC20(StakedGLP_TOKEN).transfer(USER, IERC20(StakedGLP_TOKEN).balanceOf(RICH_FSGLP));
         vm.stopPrank();
     }
 
@@ -46,8 +46,8 @@ contract SIVGLPTest is Y2KEarthQuakeHelper {
     function testV1EndEpoch() public {
         /******************** Create markets ************************/
 
-        uint40 begin = uint40(block.timestamp + 2 days);
-        uint40 end = uint40(block.timestamp + 365 days);
+        uint40 begin = uint40(block.timestamp + 5 days);
+        uint40 end = uint40(block.timestamp + 7 days);
         (
             address premium,
             address collateral,
@@ -63,8 +63,6 @@ contract SIVGLPTest is Y2KEarthQuakeHelper {
         );
 
         /******************** USER deposit ************************/
-
-        vm.warp(begin - 1 days);
 
         vm.startPrank(USER);
 
@@ -86,7 +84,7 @@ contract SIVGLPTest is Y2KEarthQuakeHelper {
         /******************** Purchase Insurance ************************/
 
         // generate yields
-        vm.warp(end - 1 days);
+        vm.warp(begin - 1 days);
 
         // check farming balance
         uint256 SIV_WETH_AMOUNT = IYieldSource(yieldSource).pendingYieldInToken(
@@ -167,8 +165,8 @@ contract SIVGLPTest is Y2KEarthQuakeHelper {
     function testV2EndEpoch() public {
         /******************** Create markets ************************/
 
-        uint40 begin = uint40(block.timestamp + 2 days);
-        uint40 end = uint40(block.timestamp + 365 days);
+        uint40 begin = uint40(block.timestamp + 5 days);
+        uint40 end = uint40(block.timestamp + 7 days);
         (
             address premium,
             address collateral,
@@ -184,8 +182,6 @@ contract SIVGLPTest is Y2KEarthQuakeHelper {
         );
 
         /******************** USER deposit ************************/
-
-        vm.warp(begin - 1 days);
 
         vm.startPrank(USER);
 
@@ -207,7 +203,7 @@ contract SIVGLPTest is Y2KEarthQuakeHelper {
         /******************** Purchase Insurance ************************/
 
         // generate yields
-        vm.warp(end - 1 days);
+        vm.warp(begin - 1 days);
 
         // check farming balance
         uint256 SIV_WETH_AMOUNT = IYieldSource(yieldSource).pendingYieldInToken(
@@ -277,8 +273,8 @@ contract SIVGLPTest is Y2KEarthQuakeHelper {
     function testCarouselEndEpoch() public {
         /******************** Create markets ************************/
 
-        uint40 begin = uint40(block.timestamp + 2 days);
-        uint40 end = uint40(block.timestamp + 365 days);
+        uint40 begin = uint40(block.timestamp + 5 days);
+        uint40 end = uint40(block.timestamp + 7 days);
         (
             address premium,
             address collateral,
@@ -297,8 +293,6 @@ contract SIVGLPTest is Y2KEarthQuakeHelper {
         );
 
         /******************** USER deposit ************************/
-
-        vm.warp(begin - 1 days);
 
         vm.startPrank(USER);
 
@@ -320,7 +314,7 @@ contract SIVGLPTest is Y2KEarthQuakeHelper {
         /******************** Purchase Insurance ************************/
 
         // generate yields
-        vm.warp(end - 1 days);
+        vm.warp(begin - 1 days);
 
         // check farming balance
         uint256 SIV_WETH_AMOUNT = IYieldSource(yieldSource).pendingYieldInToken(
@@ -411,10 +405,10 @@ contract SIVGLPTest is Y2KEarthQuakeHelper {
     function testCombinedEndToEndEndEpoch() public {
         /******************** Create markets ************************/
 
-        uint40 begin1 = uint40(block.timestamp + 2 days);
-        uint40 end1 = uint40(block.timestamp + 182 days);
-        uint40 begin2 = uint40(block.timestamp + 184 days);
-        uint40 end2 = uint40(block.timestamp + 367 days);
+        uint40 begin1 = uint40(block.timestamp + 6 hours);
+        uint40 end1 = uint40(block.timestamp + 12 hours);
+        uint40 begin2 = uint40(block.timestamp + 14 hours);
+        uint40 end2 = uint40(block.timestamp + 1 days);
         (
             address premiumV1,
             address collateralV1,
@@ -430,7 +424,6 @@ contract SIVGLPTest is Y2KEarthQuakeHelper {
 
         /******************** USER deposit to v1 epoch 1 ************************/
 
-        vm.warp(begin1 - 1 days);
         vm.startPrank(USER);
 
         // deposit into SIV, only USER
@@ -442,7 +435,7 @@ contract SIVGLPTest is Y2KEarthQuakeHelper {
         /******************** Purchase Insurance for epoch 1 ************************/
 
         // generate yields
-        vm.warp(end1 - 1 days);
+        vm.warp(begin1 - 1 hours);
 
         // check farming balance
         uint256 SIV_WETH_AMOUNT1 = IYieldSource(yieldSource)
@@ -465,7 +458,7 @@ contract SIVGLPTest is Y2KEarthQuakeHelper {
         /******************** End Epoch ************************/
 
         // trigger end of epoch
-        vm.warp(end1 + 1 days);
+        vm.warp(end1 + 1 hours);
         controllerV1.triggerEndEpoch(marketIdV1, epochId1V1);
 
         // check vault balances on withdraw
@@ -515,7 +508,6 @@ contract SIVGLPTest is Y2KEarthQuakeHelper {
 
         /******************** USER2 deposit ************************/
 
-        vm.warp(begin2 - 1 days);
         vm.startPrank(USER);
 
         // deposit into SIV, only USER
@@ -527,7 +519,7 @@ contract SIVGLPTest is Y2KEarthQuakeHelper {
         /******************** Purchase Insurance for epoch 2 ************************/
 
         // generate yields
-        vm.roll(block.number + 100000000);
+        vm.warp(begin2 - 1 hours);
 
         // check farming balance
         uint256 SIV_WETH_AMOUNT2 = IYieldSource(yieldSource)
