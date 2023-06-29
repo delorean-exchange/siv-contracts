@@ -46,7 +46,7 @@ contract StargateLPYieldSource is IYieldSource {
     ) {
         require(_lpToken != address(0), "LP: zero address");
         require(_staking != address(0), "Staking: zero address");
-        require(_router != address(0), "Staking: zero address");
+        require(_router != address(0), "Router: zero address");
 
         pid = _pid;
         staking = ILPStaking(_staking);

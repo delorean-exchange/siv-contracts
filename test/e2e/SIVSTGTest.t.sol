@@ -14,7 +14,7 @@ import {IInsuranceProvider} from "../../src/interfaces/IInsuranceProvider.sol";
 import {IYieldSource} from "../../src/interfaces/IYieldSource.sol";
 import {ILPStaking} from "../../src/interfaces/stargate/ILPStaking.sol";
 
-contract EarthquakeSIVTest is Y2KEarthQuakeHelper {
+contract SIVSTGTest is Y2KEarthQuakeHelper {
     uint256 public constant LP_DEPOSIT_AMOUNT = 1000000000;
     uint256 public constant WETH_DEPOSIT_AMOUNT = 10 ether;
 
