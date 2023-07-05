@@ -15,4 +15,8 @@ interface IInsuranceProvider {
     function claimPayouts(uint256) external returns (uint256);
 
     function emissionsToken() external view returns (address);
+
+    function paymentToken(uint256) external view returns (address);
+
+    error AddressZero();
 }

@@ -42,10 +42,10 @@ contract StakedGLPYieldSource is IYieldSource {
         address _rewardRouter,
         address _swapRouter
     ) {
-        require(_sGLP != address(0), "sGLP: zero address");
-        require(_weth != address(0), "WETH: zero address");
-        require(_rewardRouter != address(0), "GMX router: zero address");
-        require(_swapRouter != address(0), "Swap router: zero address");
+        if (_sGLP == address(0)) revert AddressZero();
+        if (_weth == address(0)) revert AddressZero();
+        if (_rewardRouter == address(0)) revert AddressZero();
+        if (_swapRouter == address(0)) revert AddressZero();
 
         sourceToken = IERC20(_sGLP);
         yieldToken = IERC20(_weth);
@@ -100,6 +100,7 @@ contract StakedGLPYieldSource is IYieldSource {
      * @notice Stake sGLP tokens
      */
     function deposit(uint256 amount) external override onlyOwner {
+        if (amount == 0) revert AmountZero();
         sourceToken.safeTransferFrom(msg.sender, address(this), amount);
     }
 
@@ -111,6 +112,9 @@ contract StakedGLPYieldSource is IYieldSource {
         bool claim,
         address to
     ) external override onlyOwner {
+        if (amount == 0) revert AmountZero();
+        if (to == address(0)) revert AddressZero();
+
         if (claim) _harvest();
 
         uint256 balance = sourceToken.balanceOf(address(this));
@@ -132,6 +136,9 @@ contract StakedGLPYieldSource is IYieldSource {
         onlyOwner
         returns (uint256 yieldAmount, uint256 actualOut)
     {
+        if (outToken == address(0)) revert AddressZero();
+        if (amount == 0) revert AmountZero();
+
         // harvest by withdraw
         _harvest();
 
@@ -139,25 +146,23 @@ contract StakedGLPYieldSource is IYieldSource {
         // if available reward in reward tracker is not enough
         if (amount > balance) { amount = balance; }
 
-        if (amount > 0) {
-            if (outToken == address(yieldToken)) {
-                yieldToken.transfer(msg.sender, amount);
-                actualOut = amount;
-            } else {
-                // swap yield into outToken
-                yieldToken.safeApprove(address(swapRouter), amount);
-                address[] memory path = new address[](2);
-                path[0] = address(yieldToken);
-                path[1] = outToken;
-                uint256[] memory amounts = swapRouter.swapExactTokensForTokens(
-                    amount,
-                    0,
-                    path,
-                    msg.sender,
-                    block.timestamp
-                );
-                actualOut = amounts[amounts.length - 1];
-            }
+        if (outToken == address(yieldToken)) {
+            yieldToken.transfer(msg.sender, amount);
+            actualOut = amount;
+        } else {
+            // swap yield into outToken
+            yieldToken.safeApprove(address(swapRouter), amount);
+            address[] memory path = new address[](2);
+            path[0] = address(yieldToken);
+            path[1] = outToken;
+            uint256[] memory amounts = swapRouter.swapExactTokensForTokens(
+                amount,
+                0,
+                path,
+                msg.sender,
+                block.timestamp
+            );
+            actualOut = amounts[amounts.length - 1];
         }
 
         yieldAmount = _transferYield();

@@ -6,6 +6,8 @@ import {IERC20} from "openzeppelin/token/ERC20/IERC20.sol";
 import {SafeERC20} from "openzeppelin/token/ERC20/utils/SafeERC20.sol";
 import {Math} from "openzeppelin/utils/math/Math.sol";
 
+import {ISemiFungibleVault} from "y2k-earthquake/src/v2/interfaces/ISemiFungibleVault.sol";
+
 import {IInsuranceProvider} from "../interfaces/IInsuranceProvider.sol";
 import {ICarouselFactoryExtended} from "../interfaces/earthquake/ICarouselFactoryExtended.sol";
 import {ICarouselExtended} from "../interfaces/earthquake/ICarouselExtended.sol";
@@ -30,7 +32,7 @@ contract Y2KEarthquakeCarouselInsuranceProvider is IInsuranceProvider {
      * @param _carouselFactory Address of Earthquake v2 vault factory.
      */
     constructor(address _carouselFactory) {
-        require(_carouselFactory != address(0), "Factory zero address");
+        if (_carouselFactory == address(0)) revert AddressZero();
         carouselFactory = ICarouselFactoryExtended(_carouselFactory);
     }
 
@@ -48,7 +50,16 @@ contract Y2KEarthquakeCarouselInsuranceProvider is IInsuranceProvider {
      * @notice Returns vault addresses.
      * @param marketId Market Id
      */
-    function getVaults(uint256 marketId) external view returns (address[2] memory) {
+    function paymentToken(uint256 marketId) external view returns (address) {
+        address[2] memory vaults = getVaults(marketId);
+        return address(ISemiFungibleVault(vaults[0]).asset());
+    }
+
+    /**
+     * @notice Returns vault addresses.
+     * @param marketId Market Id
+     */
+    function getVaults(uint256 marketId) public view returns (address[2] memory) {
         return carouselFactory.getVaults(marketId);
     }
 

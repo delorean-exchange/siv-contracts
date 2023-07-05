@@ -7,6 +7,8 @@ import {SafeERC20} from "openzeppelin/token/ERC20/utils/SafeERC20.sol";
 import {Math} from "openzeppelin/utils/math/Math.sol";
 import {IERC1155} from "openzeppelin/token/ERC1155/IERC1155.sol";
 
+import {ISemiFungibleVault} from "y2k-earthquake/src/v2/interfaces/ISemiFungibleVault.sol";
+
 import {IInsuranceProvider} from "../interfaces/IInsuranceProvider.sol";
 import {IVaultFactory} from "y2k-earthquake/src/legacy_v1/interfaces/IVaultFactory.sol";
 import {IVault} from "y2k-earthquake/src/legacy_v1/interfaces/IVault.sol";
@@ -37,7 +39,7 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider {
      * @param _vaultFactory Address of Earthquake v1 vault factory.
      */
     constructor(address _vaultFactory) {
-        require(_vaultFactory != address(0), "VaultFactory zero address");
+        if (_vaultFactory == address(0)) revert AddressZero();
         vaultFactory = IVaultFactory(_vaultFactory);
         WETH = IVaultFactoryCustom(_vaultFactory).WETH();
     }
@@ -50,6 +52,15 @@ contract Y2KEarthquakeV1InsuranceProvider is IInsuranceProvider {
      */
     function emissionsToken() external pure returns (address) {
         return address(0);
+    }
+
+    /**
+     * @notice Returns vault addresses.
+     * @param marketId Market Id
+     */
+    function paymentToken(uint256 marketId) external view returns (address) {
+        address[2] memory vaults = getVaults(marketId);
+        return address(ISemiFungibleVault(vaults[0]).asset());
     }
 
     /**

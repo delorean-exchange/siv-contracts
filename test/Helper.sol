@@ -8,7 +8,7 @@ contract Helper is Test {
     address public constant ADMIN = address(0x1);
     address public constant TREASURY = address(0x777);
     address public constant NOTADMIN = address(0x99);
-    address public constant USER = address(0x85535e083c50f0C39a860243B9d1FAcFDbe8705a);
+    address public constant USER = address(0x520FA873d99b54d9B2B81858d5A875105bDc89ce);
     address public constant USER2 = address(0x12312);
     address public constant RELAYER = address(0x55);
     address public constant RICH_FSGLP = address(0x97bb6679ae5a6c66fFb105bA427B07E2F7fB561e);
