@@ -25,4 +25,7 @@ abstract contract IYieldSource is Ownable {
         address outToken,
         uint256 amount
     ) external virtual returns (uint256, uint256);
+
+    error AddressZero();
+    error AmountZero();
 }

@@ -84,6 +84,16 @@ contract SelfInsuredVault is Ownable, ERC1155Holder, ReentrancyGuard {
     /// @notice Emitted when `user` claimed emissions
     event ClaimEmissions(address indexed user, uint256 emissions);
 
+    // -- Errors -- //
+    error AddressZero();
+    error MaximumMarkets();
+    error MarketNotExists();
+    error InvalidMarketIndex();
+    error InvalidEmissionsToken();
+    error InvalidPaymentToken();
+    error NextEpochNotPurchasable();
+    error AmountZero();
+
     /*//////////////////////////////////////////////////////////////
                                 CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
@@ -92,13 +102,15 @@ contract SelfInsuredVault is Ownable, ERC1155Holder, ReentrancyGuard {
      * @notice Contract constructor
      * @param _paymentToken Token used for premium
      * @param _yieldSource Yield source contract address
+     * @param _emissionsToken Carousel Emissions token
      */
     constructor(
         address _paymentToken,
         address _yieldSource,
         address _emissionsToken
     ) {
-        require(_yieldSource != address(0), "SIV: zero source");
+        if (_yieldSource == address(0)) revert AddressZero();
+        if (_paymentToken == address(0)) revert AddressZero();
 
         depositToken = IYieldSource(_yieldSource).sourceToken();
         paymentToken = IERC20(_paymentToken);
@@ -123,23 +135,28 @@ contract SelfInsuredVault is Ownable, ERC1155Holder, ReentrancyGuard {
         uint256 _premiumWeight,
         uint256 _collateralWeight
     ) external onlyOwner {
-        require(markets.length < MAX_MARKETS, "SIV: max markets");
+        if (markets.length >= MAX_MARKETS) revert MaximumMarkets();
 
+        // verify emissionsToken if it's carousel
         address emisToken = IInsuranceProvider(_provider).emissionsToken();
-        require(
-            emisToken == address(0) || IERC20(emisToken) == emissionsToken,
-            "SIV: invalid emissions token"
-        );
+        if (emisToken != address(0) && IERC20(emisToken) != emissionsToken) {
+            revert InvalidEmissionsToken();
+        }
+
+        // verify payment token of the market
+        address payToken = IInsuranceProvider(_provider).paymentToken(_marketId);
+        if (payToken != address(paymentToken)) revert InvalidPaymentToken();
 
         address[2] memory vaults = IInsuranceProvider(_provider).getVaults(
             _marketId
         );
-        require(vaults[0] != address(0) && vaults[1] != address(0), "SIV: Market doesn't exist");
+        if (vaults[0] == address(0) || vaults[1] == address(0)) {
+            revert MarketNotExists();
+        }
 
         IERC1155(vaults[0]).setApprovalForAll(_provider, true);
         IERC1155(vaults[1]).setApprovalForAll(_provider, true);
 
-        // tODO does this market share the same paymentToken?
         totalWeight += _premiumWeight + _collateralWeight;
         markets.push(
             MarketInfo(_provider, _marketId, _premiumWeight, _collateralWeight)
@@ -157,7 +174,7 @@ contract SelfInsuredVault is Ownable, ERC1155Holder, ReentrancyGuard {
         uint256 _premiumWeight,
         uint256 _collateralWeight
     ) external onlyOwner {
-        require(index < markets.length, "SIV: invalid index");
+        if (index >= markets.length) revert InvalidMarketIndex();
         totalWeight =
             totalWeight +
             _premiumWeight +
@@ -184,10 +201,9 @@ contract SelfInsuredVault is Ownable, ERC1155Holder, ReentrancyGuard {
         for (uint256 i = 0; i < markets.length; i++) {
             MarketInfo memory market = markets[i];
             IInsuranceProvider provider = IInsuranceProvider(market.provider);
-            require(
-                provider.isNextEpochPurchasable(market.marketId),
-                "SIV: not purchasable"
-            );
+            if (!provider.isNextEpochPurchasable(market.marketId)) {
+                revert NextEpochNotPurchasable();
+            }
 
             uint256 premiumAmount = (actualOut * market.premiumWeight) /
                 totalWeight;
@@ -298,6 +314,9 @@ contract SelfInsuredVault is Ownable, ERC1155Holder, ReentrancyGuard {
      * @param receiver for share
      */
     function deposit(uint256 amount, address receiver) public nonReentrant {
+        if (amount == 0) revert AmountZero();
+        if (receiver == address(0)) revert AddressZero();
+
         claimVaults();
 
         depositToken.safeTransferFrom(msg.sender, address(this), amount);
@@ -323,6 +342,9 @@ contract SelfInsuredVault is Ownable, ERC1155Holder, ReentrancyGuard {
      * @param to receiver address
      */
     function withdraw(uint256 amount, address to) public nonReentrant {
+        if (amount == 0) revert AmountZero();
+        if (to == address(0)) revert AddressZero();
+
         claimVaults();
 
         UserInfo storage user = userInfos[msg.sender];

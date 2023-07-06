@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.13;
 
-import "y2k-earthquake/src/v2/interfaces/IVaultFactoryV2.sol";
+import {IVaultFactoryV2} from "y2k-earthquake/src/v2/interfaces/IVaultFactoryV2.sol";
 
 interface IVaultFactoryV2Extended is IVaultFactoryV2 {
     function getEpochsByMarketId(

@@ -44,9 +44,9 @@ contract StargateLPYieldSource is IYieldSource {
         address _staking,
         address _router
     ) {
-        require(_lpToken != address(0), "LP: zero address");
-        require(_staking != address(0), "Staking: zero address");
-        require(_router != address(0), "Staking: zero address");
+        if (_lpToken == address(0)) revert AddressZero();
+        if (_staking == address(0)) revert AddressZero();
+        if (_router == address(0)) revert AddressZero();
 
         pid = _pid;
         staking = ILPStaking(_staking);
@@ -88,6 +88,8 @@ contract StargateLPYieldSource is IYieldSource {
      * @notice Stake lp tokens
      */
     function deposit(uint256 amount) external override onlyOwner {
+        if (amount == 0) revert AmountZero();
+
         sourceToken.safeTransferFrom(msg.sender, address(this), amount);
         _deposit(amount);
     }
@@ -101,6 +103,9 @@ contract StargateLPYieldSource is IYieldSource {
         bool claim,
         address to
     ) external override onlyOwner {
+        if (amount == 0) revert AmountZero();
+        if (to == address(0)) revert AddressZero();
+
         staking.withdraw(pid, amount);
         uint256 balance = sourceToken.balanceOf(address(this));
         if (amount > balance) {
@@ -119,6 +124,9 @@ contract StargateLPYieldSource is IYieldSource {
         address outToken,
         uint256 amount
     ) external override onlyOwner returns (uint256 yieldAmount, uint256 actualOut) {
+        if (outToken == address(0)) revert AddressZero();
+        if (amount == 0) revert AmountZero();
+
         // harvest by withdraw
         ILPStaking.UserInfo memory info = staking.userInfo(pid, address(this));
         staking.withdraw(pid, info.amount);
@@ -126,15 +134,13 @@ contract StargateLPYieldSource is IYieldSource {
         // redeposit asset
         _deposit(info.amount);
 
-        if (amount > 0) {
-            // swap yield into outToken
-            yieldToken.safeApprove(address(router), amount);
-            address[] memory path = new address[](2);
-            path[0] = address(yieldToken);
-            path[1] = outToken;
-            uint256[] memory amounts = router.swapExactTokensForTokens(amount, 0, path, msg.sender, block.timestamp);
-            actualOut = amounts[amounts.length - 1];
-        }
+        // swap yield into outToken
+        yieldToken.safeApprove(address(router), amount);
+        address[] memory path = new address[](2);
+        path[0] = address(yieldToken);
+        path[1] = outToken;
+        uint256[] memory amounts = router.swapExactTokensForTokens(amount, 0, path, msg.sender, block.timestamp);
+        actualOut = amounts[amounts.length - 1];
 
         // transfer rest yield
         yieldAmount = _transferYield();

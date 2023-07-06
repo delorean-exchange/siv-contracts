@@ -6,10 +6,15 @@
 
     "paymentToken": "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
     "emissionsToken": "0x65c936f008bc34fe819bce9fa5afd9dc2d49977f",
+    "wethToken": "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
 
     "stargatePoolId": 0,
     "stargateLPToken": "0x892785f33CdeE22A30AEF750F285E18c18040c3e",
     "stargateStaking": "0xeA8DfEE1898a7e0a59f7527F076106d7e44c2176",
+
+    "stakedGlpToken": "0x5402B5F40310bDED796c7D0F3FF6683f5C0cFfdf",
+    "gmxRewardRouter": "0xA906F338CB21815cBc4Bc87ace9e68c87eF8d8F1",
+
     "sushiRouter": "0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506"
   }
 }

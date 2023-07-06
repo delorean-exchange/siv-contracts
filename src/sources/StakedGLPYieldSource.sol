@@ -1,79 +1,188 @@
-// // SPDX-License-Identifier: UNLICENSED
-// pragma solidity ^0.8.13;
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity ^0.8.13;
 
-// import "forge-std/console.sol";
+import {SafeERC20} from "openzeppelin/token/ERC20/utils/SafeERC20.sol";
+import {IERC20} from "openzeppelin/token/ERC20/IERC20.sol";
 
-// import { SafeERC20 } from "openzeppelin/token/ERC20/utils/SafeERC20.sol";
-// import { IERC20 } from "openzeppelin/token/ERC20/IERC20.sol";
+import {IUniswapV2Router02} from "uniswap-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 
-// import { IYieldSource } from "../interfaces/IYieldSource.sol";
-// import { IGLPRewardTracker } from "../interfaces/IGLPRewardTracker.sol";
+import {IYieldSource} from "../interfaces/IYieldSource.sol";
+import {IRewardTracker} from "../interfaces/gmx/IRewardTracker.sol";
+import {IRewardRouterV2} from "../interfaces/gmx/IRewardRouterV2.sol";
 
-// contract StakedGLPYieldSource is IYieldSource {
-//     using SafeERC20 for IERC20;
+/// @title Yield Source contract for Staked GLP
+/// @author Y2K Finance
+/// @dev This is for reward management by LP staking, not yield bearing asset
+///      Owner of this contract is always SIV
+contract StakedGLPYieldSource is IYieldSource {
+    using SafeERC20 for IERC20;
 
-//     IERC20 public immutable override sourceToken;
-//     IERC20 public immutable override yieldToken;
-//     IGLPRewardTracker public immutable tracker;
-//     uint256 public deposits;
-//     address public owner;
+    /// @notice Fee + Staked GLP token
+    IERC20 public immutable override sourceToken;
 
-//     constructor(address stglp_, address weth_, address tracker_) {
-//         require(stglp_ != address(0), "SGYS: zero address stglp");
-//         require(weth_ != address(0), "SGYS: zero address weth");
-//         require(tracker_ != address(0), "SGYS: zero address tracker");
+    /// @notice Output token: WETH
+    IERC20 public immutable override yieldToken;
 
-//         owner = msg.sender;
-//         sourceToken = IERC20(stglp_);
-//         yieldToken = IERC20(weth_);
-//         tracker = IGLPRewardTracker(tracker_);
-//     }
+    /// @notice GMX Reward Router
+    IRewardRouterV2 public immutable rewardRouter;
 
-//     function setOwner(address owner_) external override {
-//         require(msg.sender == owner, "only owner");
-//         owner = owner_;
-//     }
+    /// @notice Swap router
+    IUniswapV2Router02 public swapRouter;
 
-//     function deposit(uint256 amount, bool claim) external override {
-//         require(msg.sender == owner, "only owner");
-//         sourceToken.safeTransferFrom(msg.sender, address(this), amount);
+    /**
+     * @notice Contract constructor
+     * @param _sGLP Fee + Staked GLP
+     * @param _weth WETH token
+     * @param _rewardRouter Reward router contract
+     * @param _swapRouter Swap router contract
+     */
+    constructor(
+        address _sGLP,
+        address _weth,
+        address _rewardRouter,
+        address _swapRouter
+    ) {
+        if (_sGLP == address(0)) revert AddressZero();
+        if (_weth == address(0)) revert AddressZero();
+        if (_rewardRouter == address(0)) revert AddressZero();
+        if (_swapRouter == address(0)) revert AddressZero();
 
-//         if (claim) _harvest();
-//     }
+        sourceToken = IERC20(_sGLP);
+        yieldToken = IERC20(_weth);
+        rewardRouter = IRewardRouterV2(_rewardRouter);
+        swapRouter = IUniswapV2Router02(_swapRouter);
+    }
 
-//     function withdraw(uint256 amount, bool claim, address to) external override {
-//         require(msg.sender == owner, "only owner");
+    /**
+     * @notice Total deposited lp token
+     */
+    function totalDeposit() external view override returns (uint256) {
+        return sourceToken.balanceOf(address(this));
+    }
 
-//         uint256 balance = sourceToken.balanceOf(address(this));
-//         if (amount > balance) {
-//             amount = balance;
-//         }
-//         sourceToken.safeTransfer(to, amount);
+    /**
+     * @notice Returns pending yield
+     */
+    function pendingYield() public view override returns (uint256) {
+        // WETH rewards
+        IRewardTracker feeGlpTracker = IRewardTracker(
+            rewardRouter.feeGlpTracker()
+        );
+        IRewardTracker feeGmxTracker = IRewardTracker(
+            rewardRouter.feeGmxTracker()
+        );
+        return
+            feeGlpTracker.claimable(address(this)) +
+            feeGmxTracker.claimable(address(this)) +
+            yieldToken.balanceOf(address(this));
+    }
 
-//         if (claim) _harvest();
-//     }
+    /**
+     * @notice Returns expected token from yield
+     */
+    function pendingYieldInToken(
+        address outToken
+    ) public view override returns (uint256 amountOut) {
+        uint256 amountIn = pendingYield();
+        if (outToken == address(yieldToken)) {
+            return amountIn;
+        }
+        if (amountIn > 0) {
+            address[] memory path = new address[](2);
+            path[0] = address(yieldToken);
+            path[1] = outToken;
+            uint256[] memory amounts = swapRouter.getAmountsOut(amountIn, path);
+            amountOut = amounts[amounts.length - 1];
+        }
+    }
 
-//     function _pendingYield() internal view returns (uint256) {
-//         return tracker.claimable(address(this));
-//     }
+    /**
+     * @notice Stake sGLP tokens
+     */
+    function deposit(uint256 amount) external override onlyOwner {
+        if (amount == 0) revert AmountZero();
+        sourceToken.safeTransferFrom(msg.sender, address(this), amount);
+    }
 
-//     function _harvest() internal {
-//         uint256 before = yieldToken.balanceOf(address(this));
-//         tracker.claim(address(this));
-//         uint256 amount = yieldToken.balanceOf(address(this)) - before;
-//         yieldToken.safeTransfer(owner, amount);
-//     }
+    /**
+     * @notice Withdraw lp tokens
+     */
+    function withdraw(
+        uint256 amount,
+        bool claim,
+        address to
+    ) external override onlyOwner {
+        if (amount == 0) revert AmountZero();
+        if (to == address(0)) revert AddressZero();
 
-//     function harvest() external override {
-//         require(msg.sender == owner, "only owner");
-//         _harvest();
-//     }
+        if (claim) _harvest();
 
-//     function pendingYield() external override view returns (uint256) {
-//         return _pendingYield();
-//     }
+        uint256 balance = sourceToken.balanceOf(address(this));
+        if (amount > balance) {
+            amount = balance;
+        }
+        sourceToken.safeTransfer(to, amount);
+    }
 
-//     function totalDeposit() external override view returns (uint256) {
-//         return sourceToken.balanceOf(address(this));
-//     }
-// }
+    /**
+     * @notice Claim rewards and convert
+     */
+    function claimAndConvert(
+        address outToken,
+        uint256 amount
+    )
+        external
+        override
+        onlyOwner
+        returns (uint256 yieldAmount, uint256 actualOut)
+    {
+        if (outToken == address(0)) revert AddressZero();
+        if (amount == 0) revert AmountZero();
+
+        // harvest by withdraw
+        _harvest();
+
+        uint256 balance = yieldToken.balanceOf(address(this));
+        // if available reward in reward tracker is not enough
+        if (amount > balance) { amount = balance; }
+
+        if (outToken == address(yieldToken)) {
+            yieldToken.transfer(msg.sender, amount);
+            actualOut = amount;
+        } else {
+            // swap yield into outToken
+            yieldToken.safeApprove(address(swapRouter), amount);
+            address[] memory path = new address[](2);
+            path[0] = address(yieldToken);
+            path[1] = outToken;
+            uint256[] memory amounts = swapRouter.swapExactTokensForTokens(
+                amount,
+                0,
+                path,
+                msg.sender,
+                block.timestamp
+            );
+            actualOut = amounts[amounts.length - 1];
+        }
+
+        yieldAmount = _transferYield();
+    }
+
+    /**
+     * @notice Harvest rewards
+     */
+    function _harvest() internal returns (uint256 amount) {
+        uint256 before = yieldToken.balanceOf(address(this));
+        rewardRouter.claimFees();
+        amount = yieldToken.balanceOf(address(this)) - before;
+        rewardRouter.compound();
+    }
+
+    /**
+     * @notice Transfer all yield tokens to vault
+     */
+    function _transferYield() internal returns (uint256 amount) {
+        amount = yieldToken.balanceOf(address(this));
+        yieldToken.safeTransfer(msg.sender, amount);
+    }
+}
