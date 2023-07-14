@@ -66,14 +66,16 @@ contract StargateLPYieldSource is IYieldSource {
     /**
      * @notice Returns expected token from yield
      */
-    function pendingYieldInToken(address outToken) external view override returns (uint256 amountOut) {
+    function pendingYieldInToken(
+        address outToken
+    ) external view override returns (uint256 amountOut) {
         uint256 amountIn = pendingYield();
         if (amountIn > 0) {
             address[] memory path = new address[](2);
             path[0] = address(yieldToken);
             path[1] = outToken;
             uint256[] memory amounts = router.getAmountsOut(amountIn, path);
-            amountOut = amounts[amounts.length - 1];
+            amountOut = amounts[1];
         }
     }
 
@@ -123,15 +125,23 @@ contract StargateLPYieldSource is IYieldSource {
     function claimAndConvert(
         address outToken,
         uint256 amount
-    ) external override onlyOwner returns (uint256 yieldAmount, uint256 actualOut) {
+    )
+        external
+        override
+        onlyOwner
+        returns (uint256 yieldAmount, uint256 actualOut)
+    {
         if (outToken == address(0)) revert AddressZero();
         if (amount == 0) revert AmountZero();
 
         // harvest by withdraw
         ILPStaking.UserInfo memory info = staking.userInfo(pid, address(this));
+
+        // NOTE: This withdrawas from the staking contract
         staking.withdraw(pid, info.amount);
 
         // redeposit asset
+        // NOTE: This deposits into the staking contract (assuming this is Stargate)? Why would we be depositing back into it?
         _deposit(info.amount);
 
         // swap yield into outToken
@@ -139,10 +149,20 @@ contract StargateLPYieldSource is IYieldSource {
         address[] memory path = new address[](2);
         path[0] = address(yieldToken);
         path[1] = outToken;
-        uint256[] memory amounts = router.swapExactTokensForTokens(amount, 0, path, msg.sender, block.timestamp);
-        actualOut = amounts[amounts.length - 1];
+        // TODO: This could be front-run if the minOut is zero - change amountOutMin to a value
+        // NOTE: You need to make it ->  amount * multiple / slippage where slippage is either a fixed value or a provided input on selfInsuredVault call
+        // NOTE: If it's fixed there is a risk of reverting! So providing slippage would be better
+        uint256[] memory amounts = router.swapExactTokensForTokens(
+            amount,
+            0,
+            path,
+            msg.sender,
+            block.timestamp
+        );
+        actualOut = amounts[1];
 
         // transfer rest yield
+        // NOTE: Why is the yield token being transferred to the msg.sender? Shouldn't it be swapped or something?
         yieldAmount = _transferYield();
     }
 
@@ -157,7 +177,7 @@ contract StargateLPYieldSource is IYieldSource {
     /**
      * @notice Stake lp token
      */
-    function _deposit(uint256 amount) internal {
+    function _deposit(uint256 amount) private {
         sourceToken.safeApprove(address(staking), amount);
         staking.deposit(pid, amount);
     }

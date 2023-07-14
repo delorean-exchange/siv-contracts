@@ -92,7 +92,7 @@ contract StakedGLPYieldSource is IYieldSource {
             path[0] = address(yieldToken);
             path[1] = outToken;
             uint256[] memory amounts = swapRouter.getAmountsOut(amountIn, path);
-            amountOut = amounts[amounts.length - 1];
+            amountOut = amounts[1];
         }
     }
 
@@ -144,7 +144,9 @@ contract StakedGLPYieldSource is IYieldSource {
 
         uint256 balance = yieldToken.balanceOf(address(this));
         // if available reward in reward tracker is not enough
-        if (amount > balance) { amount = balance; }
+        if (amount > balance) {
+            amount = balance;
+        }
 
         if (outToken == address(yieldToken)) {
             yieldToken.transfer(msg.sender, amount);
@@ -155,6 +157,7 @@ contract StakedGLPYieldSource is IYieldSource {
             address[] memory path = new address[](2);
             path[0] = address(yieldToken);
             path[1] = outToken;
+            // TODO: Front-run risk - need to change amountMinIn
             uint256[] memory amounts = swapRouter.swapExactTokensForTokens(
                 amount,
                 0,
@@ -162,7 +165,7 @@ contract StakedGLPYieldSource is IYieldSource {
                 msg.sender,
                 block.timestamp
             );
-            actualOut = amounts[amounts.length - 1];
+            actualOut = amounts[1];
         }
 
         yieldAmount = _transferYield();
@@ -171,7 +174,7 @@ contract StakedGLPYieldSource is IYieldSource {
     /**
      * @notice Harvest rewards
      */
-    function _harvest() internal returns (uint256 amount) {
+    function _harvest() private returns (uint256 amount) {
         uint256 before = yieldToken.balanceOf(address(this));
         rewardRouter.claimFees();
         amount = yieldToken.balanceOf(address(this)) - before;
