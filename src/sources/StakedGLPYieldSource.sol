@@ -129,7 +129,8 @@ contract StakedGLPYieldSource is IYieldSource {
      */
     function claimAndConvert(
         address outToken,
-        uint256 amount
+        uint256 amount,
+        uint256 amountOutMin
     )
         external
         override
@@ -157,10 +158,9 @@ contract StakedGLPYieldSource is IYieldSource {
             address[] memory path = new address[](2);
             path[0] = address(yieldToken);
             path[1] = outToken;
-            // TODO: Front-run risk - need to change amountMinIn
             uint256[] memory amounts = swapRouter.swapExactTokensForTokens(
                 amount,
-                0,
+                amountOutMin,
                 path,
                 msg.sender,
                 block.timestamp

@@ -198,17 +198,23 @@ contract SelfInsuredVault is Ownable, ERC1155Holder, ReentrancyGuard {
 
     /**
      * @notice Purchase Insurance
+     * @param slippage Slippage tolerance is input in basis e.g. 100 is 1%
      */
-    function purchaseInsuranceForNextEpoch() external onlyOwner {
+    function purchaseInsuranceForNextEpoch(
+        uint256 slippage
+    ) external onlyOwner {
         if (totalWeight == 0) return;
 
         // fetches balance and pending stargate
         uint256 totalYield = yieldSource.pendingYield();
+        uint256 amountOutMin = totalYield - (totalYield * slippage) / 10_000;
         // NOTE: claimAndConvert is onlyOwner so address(this) needs to be the owner
         // NOTE: If only address this can call then in theory you can check inputs here to save gas e.g. errors of AddressZero() and AmountZero()
+
         (, uint256 actualOut) = yieldSource.claimAndConvert(
             address(paymentToken),
-            totalYield
+            totalYield,
+            amountOutMin
         );
 
         // Purchase insurance via Y2K

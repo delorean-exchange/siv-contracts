@@ -124,7 +124,8 @@ contract StargateLPYieldSource is IYieldSource {
      */
     function claimAndConvert(
         address outToken,
-        uint256 amount
+        uint256 amount,
+        uint256 amountOutMin
     )
         external
         override
@@ -149,12 +150,9 @@ contract StargateLPYieldSource is IYieldSource {
         address[] memory path = new address[](2);
         path[0] = address(yieldToken);
         path[1] = outToken;
-        // TODO: This could be front-run if the minOut is zero - change amountOutMin to a value
-        // NOTE: You need to make it ->  amount * multiple / slippage where slippage is either a fixed value or a provided input on selfInsuredVault call
-        // NOTE: If it's fixed there is a risk of reverting! So providing slippage would be better
         uint256[] memory amounts = router.swapExactTokensForTokens(
             amount,
-            0,
+            amountOutMin,
             path,
             msg.sender,
             block.timestamp
